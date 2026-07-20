@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "tool": "mcp__atlassian__*",
+      "drop_keys": ["self", "expand", "avatarUrls", "iconUrl", "profilePicture", "accountType", "timeZone"]
+    },
+    {
+      "tool": "mcp__github__*",
+      "drop_keys": ["node_id", "gravatar_id", "avatar_url", "events_url", "followers_url", "following_url", "gists_url", "organizations_url", "received_events_url", "repos_url", "starred_url", "subscriptions_url"]
+    }
+  ]
+}
