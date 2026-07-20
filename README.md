@@ -94,7 +94,18 @@ emits a replacement when the result is strictly smaller.
 
 Every invocation appends one line to `~/.local/state/isthmos/measure.jsonl`
 with before/after byte counts per tool, so pruning rules are driven by real
-data, not guesses.
+data, not guesses. `isthmos stats` turns that log into a savings table:
+
+```
+$ isthmos stats -since 168h
+TOOL                                      CALLS  IN     OUT    SAVED  SAVED%  ~TOKENS
+mcp__atlassian__searchJiraIssuesUsingJql  42     1.9MB  0.6MB  1.3MB  68.4%   340787
+mcp__github__get_me                       7      12.3KB 4.1KB  8.2KB  66.7%   2099
+TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   342886
+```
+
+`-file` points at a different log, `-since` bounds the window. The `~TOKENS`
+column is a rough 4-bytes-per-token estimate, not a tokenizer.
 
 ## Design constraints
 

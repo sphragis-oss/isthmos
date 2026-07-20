@@ -36,6 +36,9 @@ func configPath() string {
 	return filepath.Join(home, ".config", "isthmos", "rules.json")
 }
 
+// version is set by goreleaser via ldflags
+var version = "dev"
+
 func main() {
 	mode, args := "hook", os.Args[1:]
 	if len(args) > 0 {
@@ -46,8 +49,12 @@ func main() {
 		runHook()
 	case "filter":
 		runFilter(args)
+	case "stats":
+		runStats(args)
+	case "version":
+		fmt.Println(version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME]")
+		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|stats|version]")
 		os.Exit(2)
 	}
 }
