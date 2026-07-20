@@ -17,3 +17,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Starter rules for Atlassian and GitHub MCP servers in `rules.example.json`.
 - `isthmos stats`, a per-tool savings table over the measurement log (`-file`, `-since`), with a rough token estimate.
 - `isthmos version`, wired to the goreleaser ldflags version.
+- Generic size caps per rule: `max_items` for arrays and `max_str` for strings, always with an explicit truncation marker; the strictest matching limit wins.

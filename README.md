@@ -81,10 +81,18 @@ Tool names are glob-matched, listed keys are dropped recursively:
 ```json
 {
   "rules": [
-    {"tool": "mcp__github__*", "drop_keys": ["node_id", "avatar_url"]}
+    {"tool": "mcp__github__*", "drop_keys": ["node_id", "avatar_url"], "max_items": 30},
+    {"tool": "mcp__*", "max_str": 8000}
   ]
 }
 ```
+
+Besides `drop_keys`, a rule can cap payload size generically: `max_items`
+truncates any array beyond N elements and `max_str` truncates any string beyond
+N bytes (at a rune boundary). Both replace the removed tail with an explicit
+`[isthmos: ... truncated]` marker so the model knows the payload is partial;
+truncation is never silent. When several rules match, the strictest positive
+limit wins.
 
 See `rules.example.json` for a starter set covering Atlassian and GitHub MCP
 noise fields. No config means no rewriting: isthmos is fail-open and only ever
