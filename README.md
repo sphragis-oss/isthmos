@@ -94,6 +94,14 @@ N bytes (at a rune boundary). Both replace the removed tail with an explicit
 truncation is never silent. When several rules match, the strictest positive
 limit wins.
 
+Truncation is head-and-tail, not naive: `keep_last` reserves part of the
+`max_items` budget for the newest entries, and items that look like errors
+(a truthy `error` field, or `status`/`level`/`conclusion` values such as
+`failed` or `fatal`) are always kept regardless of position, because those are
+the items an agent is usually looking for. `min_bytes` gates a whole rule:
+payloads smaller than it pass through untouched, so tiny outputs are never
+rewritten.
+
 See `rules.example.json` for a starter set covering Atlassian and GitHub MCP
 noise fields. No config means no rewriting: isthmos is fail-open and only ever
 emits a replacement when the result is strictly smaller.

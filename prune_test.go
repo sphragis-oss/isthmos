@@ -127,3 +127,72 @@ func TestLimitsForTakesStrictest(t *testing.T) {
 		t.Fatalf("Bash should have no limits, got %+v", got)
 	}
 }
+
+func TestKeepLastPreservesTail(t *testing.T) {
+	in := json.RawMessage(`{"items":["a","b","c","d","e"]}`)
+	out, err := PruneJSON(in, nil, Limits{MaxItems: 3, KeepLast: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct{ Items []any }
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := []any{"a", "b", "e"}
+	if len(got.Items) != 4 {
+		t.Fatalf("expected 3 kept + marker, got %v", got.Items)
+	}
+	for i, w := range want {
+		if got.Items[i] != w {
+			t.Fatalf("expected %v at %d, got %v", w, i, got.Items)
+		}
+	}
+}
+
+func TestErrorItemsAlwaysKept(t *testing.T) {
+	in := json.RawMessage(`{"items":[{"n":1},{"n":2},{"n":3,"status":"failed"},{"n":4,"error":"boom"},{"n":5},{"n":6}]}`)
+	out, err := PruneJSON(in, nil, Limits{MaxItems: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if !strings.Contains(s, `"status":"failed"`) || !strings.Contains(s, `"error":"boom"`) {
+		t.Fatalf("error items dropped: %s", s)
+	}
+	if !strings.Contains(s, "2 of 6 items truncated") {
+		t.Fatalf("bad marker: %s", s)
+	}
+}
+
+func TestNullErrorFieldNotTreatedAsError(t *testing.T) {
+	in := json.RawMessage(`{"items":[{"n":1},{"n":2},{"n":3,"error":null},{"n":4,"error":0}]}`)
+	out, err := PruneJSON(in, nil, Limits{MaxItems: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "2 of 4 items truncated") {
+		t.Fatalf("null/zero error fields should not pin items: %s", out)
+	}
+}
+
+func TestMinBytesGatesRule(t *testing.T) {
+	rs := Rules{Rules: []Rule{{Tool: "*", DropKeys: []string{"noise"}, MinBytes: 1000}}}
+	small := json.RawMessage(`{"noise":"x","keep":"y"}`)
+	if out, changed := Apply(rs, "anything", small); changed {
+		t.Fatalf("small payload should pass through, got %s", out)
+	}
+	big, _ := json.Marshal(map[string]string{"noise": strings.Repeat("x", 2000), "keep": "y"})
+	if _, changed := Apply(rs, "anything", big); !changed {
+		t.Fatal("large payload should be pruned")
+	}
+}
+
+func TestLimitsForMergesKeepLast(t *testing.T) {
+	rs := Rules{Rules: []Rule{
+		{Tool: "mcp__*", MaxItems: 50, KeepLast: 2},
+		{Tool: "mcp__github__*", KeepLast: 5},
+	}}
+	if lim := rs.LimitsFor("mcp__github__list_issues"); lim.KeepLast != 5 {
+		t.Fatalf("expected KeepLast 5, got %+v", lim)
+	}
+}
