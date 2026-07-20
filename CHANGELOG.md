@@ -20,3 +20,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generic size caps per rule: `max_items` for arrays and `max_str` for strings, always with an explicit truncation marker; the strictest matching limit wins.
 - Smarter array truncation: `keep_last` keeps the newest items and error-looking items are never dropped.
 - `min_bytes` per rule: payloads below the threshold pass through untouched.
+- Reversibility store: truncated originals are AES-256-GCM encrypted under `~/.local/state/isthmos/store/` with a 7-day TTL, markers carry `isthmos reveal <id>`, and a new `reveal` subcommand recovers the full payload.

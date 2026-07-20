@@ -32,9 +32,17 @@ What Isthmos explicitly does not do:
 
 ## Data handling
 
-Tool output passes through process memory only. The measurement log at
-`~/.local/state/isthmos/measure.jsonl` records byte counts and tool names, never
-payload contents.
+The measurement log at `~/.local/state/isthmos/measure.jsonl` records byte
+counts and tool names, never payload contents.
+
+When truncation occurs, the original payload is spooled to the reversibility
+store at `~/.local/state/isthmos/store/` so `isthmos reveal <id>` can recover
+it. Entries are encrypted at rest with AES-256-GCM (key in `store.key`, mode
+0600, generated locally on first use, never leaving the machine), files are
+mode 0600 in a 0700 directory, and entries expire after 7 days. The key sits
+next to the data, so this protects against casual reads and backup leakage,
+not against an attacker with your local user. Payloads that were only
+field-pruned (no truncation) are not stored at all.
 
 ## Reporting a vulnerability
 

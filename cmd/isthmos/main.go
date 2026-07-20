@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sphragis-oss/isthmos"
 )
@@ -36,6 +37,20 @@ func configPath() string {
 	return filepath.Join(home, ".config", "isthmos", "rules.json")
 }
 
+// openStore is fail-open: on any error pruning proceeds without reversibility
+func openStore() *isthmos.Store {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	st, err := isthmos.OpenStore(filepath.Join(home, ".local", "state", "isthmos", "store"), 7*24*time.Hour)
+	if err != nil {
+		slog.Error("open store", "err", err)
+		return nil
+	}
+	return st
+}
+
 // version is set by goreleaser via ldflags
 var version = "dev"
 
@@ -51,10 +66,12 @@ func main() {
 		runFilter(args)
 	case "stats":
 		runStats(args)
+	case "reveal":
+		runReveal(args)
 	case "version":
 		fmt.Println(version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|stats|version]")
+		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|stats|reveal <id>|version]")
 		os.Exit(2)
 	}
 }
@@ -72,7 +89,7 @@ func runHook() {
 		return
 	}
 	rs := isthmos.LoadRules(configPath())
-	out, changed := isthmos.Apply(rs, in.ToolName, in.ToolOutput)
+	out, changed := isthmos.ApplyWithStore(rs, in.ToolName, in.ToolOutput, openStore())
 	logMeasure(in.ToolName, len(in.ToolOutput), len(out))
 	if !changed {
 		return
@@ -96,9 +113,30 @@ func runFilter(args []string) {
 		os.Exit(1)
 	}
 	rs := isthmos.LoadRules(configPath())
-	out, _ := isthmos.Apply(rs, *tool, raw)
+	out, _ := isthmos.ApplyWithStore(rs, *tool, raw, openStore())
 	logMeasure(*tool, len(raw), len(out))
 	if _, err := os.Stdout.Write(out); err != nil {
+		slog.Error("write stdout", "err", err)
+		os.Exit(1)
+	}
+}
+
+// runReveal prints the original payload a truncation marker points at
+func runReveal(args []string) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: isthmos reveal <id>")
+		os.Exit(2)
+	}
+	st := openStore()
+	if st == nil {
+		os.Exit(1)
+	}
+	b, err := st.Load(args[0])
+	if err != nil {
+		slog.Error("reveal", "id", args[0], "err", err)
+		os.Exit(1)
+	}
+	if _, err := os.Stdout.Write(b); err != nil {
 		slog.Error("write stdout", "err", err)
 		os.Exit(1)
 	}
