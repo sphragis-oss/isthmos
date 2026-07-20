@@ -15,3 +15,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Go library API (`Apply`, `PruneJSON`, `LoadRules`) for embedding in other tools.
 - Measurement log with before/after byte counts at `~/.local/state/isthmos/measure.jsonl`.
 - Starter rules for Atlassian and GitHub MCP servers in `rules.example.json`.
+- `isthmos stats`, a per-tool savings table over the measurement log (`-file`, `-since`), with a rough token estimate.
+- `isthmos version`, wired to the goreleaser ldflags version.
