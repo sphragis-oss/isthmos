@@ -12,6 +12,8 @@ import (
 type Rule struct {
 	Tool     string   `json:"tool"`
 	DropKeys []string `json:"drop_keys"`
+	MaxItems int      `json:"max_items,omitempty"`
+	MaxStr   int      `json:"max_str,omitempty"`
 }
 
 type Rules struct {
@@ -42,4 +44,21 @@ func (rs Rules) DropFor(tool string) map[string]bool {
 		}
 	}
 	return drop
+}
+
+// LimitsFor takes the strictest positive limit across matching rules
+func (rs Rules) LimitsFor(tool string) Limits {
+	var lim Limits
+	for _, r := range rs.Rules {
+		if ok, _ := path.Match(r.Tool, tool); !ok {
+			continue
+		}
+		if r.MaxItems > 0 && (lim.MaxItems == 0 || r.MaxItems < lim.MaxItems) {
+			lim.MaxItems = r.MaxItems
+		}
+		if r.MaxStr > 0 && (lim.MaxStr == 0 || r.MaxStr < lim.MaxStr) {
+			lim.MaxStr = r.MaxStr
+		}
+	}
+	return lim
 }
