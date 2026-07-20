@@ -5,18 +5,21 @@ package isthmos
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
 type Limits struct {
 	MaxItems int
 	MaxStr   int
+	KeepLast int
 }
 
 func (l Limits) empty() bool { return l.MaxItems == 0 && l.MaxStr == 0 }
 
 // Apply returns the possibly pruned output and whether it shrank
 func Apply(rs Rules, tool string, output json.RawMessage) (json.RawMessage, bool) {
+	rs = rs.eligible(len(output))
 	drop := rs.DropFor(tool)
 	lim := rs.LimitsFor(tool)
 	if (len(drop) == 0 && lim.empty()) || len(output) == 0 {
@@ -64,7 +67,7 @@ func prune(v any, drop map[string]bool, lim Limits) any {
 		for i, val := range t {
 			t[i] = prune(val, drop, lim)
 		}
-		return capItems(t, lim.MaxItems)
+		return capItems(t, lim)
 	case string:
 		return capStr(t, lim.MaxStr)
 	default:
@@ -72,13 +75,85 @@ func prune(v any, drop map[string]bool, lim Limits) any {
 	}
 }
 
-// capItems truncates a long array, replacing the tail with an explicit marker
-func capItems(t []any, maxItems int) []any {
-	if maxItems <= 0 || len(t) <= maxItems {
+// capItems keeps head, tail, and error-looking items, replacing the rest with a marker
+func capItems(t []any, lim Limits) []any {
+	if lim.MaxItems <= 0 || len(t) <= lim.MaxItems {
 		return t
 	}
-	cut := len(t) - maxItems
-	return append(t[:maxItems], fmt.Sprintf("[isthmos: %d of %d items truncated]", cut, len(t)))
+	keepLast := lim.KeepLast
+	if keepLast >= lim.MaxItems {
+		keepLast = lim.MaxItems - 1
+	}
+	keep := make([]bool, len(t))
+	for i := 0; i < lim.MaxItems-keepLast; i++ {
+		keep[i] = true
+	}
+	for i := len(t) - keepLast; i < len(t); i++ {
+		keep[i] = true
+	}
+	for i, v := range t {
+		if !keep[i] && looksLikeError(v) {
+			keep[i] = true
+		}
+	}
+	out := make([]any, 0, lim.MaxItems+1)
+	dropped := 0
+	for i, v := range t {
+		if keep[i] {
+			out = append(out, v)
+		} else {
+			dropped++
+		}
+	}
+	if dropped == 0 {
+		return t
+	}
+	return append(out, fmt.Sprintf("[isthmos: %d of %d items truncated]", dropped, len(t)))
+}
+
+var errStates = map[string]bool{
+	"error": true, "errors": true, "failed": true, "failure": true,
+	"fatal": true, "critical": true, "unhealthy": true, "timeout": true,
+}
+
+// looksLikeError flags items truncation must never drop
+func looksLikeError(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	for k, val := range m {
+		switch strings.ToLower(k) {
+		case "error", "errors", "err", "exception":
+			if truthy(val) {
+				return true
+			}
+		case "status", "state", "level", "severity", "result", "conclusion", "outcome":
+			if s, ok := val.(string); ok && errStates[strings.ToLower(s)] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func truthy(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return t
+	case string:
+		return t != "" && strings.ToLower(t) != "null"
+	case float64:
+		return t != 0
+	case []any:
+		return len(t) > 0
+	case map[string]any:
+		return len(t) > 0
+	default:
+		return true
+	}
 }
 
 // capStr truncates a long string at a rune boundary, appending an explicit marker
