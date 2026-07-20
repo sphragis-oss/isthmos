@@ -17,23 +17,56 @@ type Limits struct {
 
 func (l Limits) empty() bool { return l.MaxItems == 0 && l.MaxStr == 0 }
 
+type pruneCtx struct {
+	drop      map[string]bool
+	lim       Limits
+	id        string
+	truncated bool
+}
+
+func (c *pruneCtx) hint() string {
+	if c.id == "" {
+		return ""
+	}
+	return ", full: isthmos reveal " + c.id
+}
+
 // Apply returns the possibly pruned output and whether it shrank
 func Apply(rs Rules, tool string, output json.RawMessage) (json.RawMessage, bool) {
+	return ApplyWithStore(rs, tool, output, nil)
+}
+
+// ApplyWithStore also spools the original payload so truncation markers are reversible
+func ApplyWithStore(rs Rules, tool string, output json.RawMessage, st *Store) (json.RawMessage, bool) {
 	rs = rs.eligible(len(output))
 	drop := rs.DropFor(tool)
 	lim := rs.LimitsFor(tool)
 	if (len(drop) == 0 && lim.empty()) || len(output) == 0 {
 		return output, false
 	}
-	pruned, err := PruneJSON(output, drop, lim)
+	c := &pruneCtx{drop: drop, lim: lim}
+	if st != nil {
+		c.id = newID()
+	}
+	pruned, err := pruneJSON(output, c)
 	if err != nil || len(pruned) >= len(output) {
 		return output, false
+	}
+	if c.truncated && st != nil && c.id != "" {
+		// fail-open: a marker must never point at a payload that was not stored
+		if err := st.Save(c.id, output); err != nil {
+			return output, false
+		}
 	}
 	return pruned, true
 }
 
 // PruneJSON drops keys and applies limits recursively, unwrapping a JSON-encoded string payload
 func PruneJSON(raw json.RawMessage, drop map[string]bool, lim Limits) ([]byte, error) {
+	return pruneJSON(raw, &pruneCtx{drop: drop, lim: lim})
+}
+
+func pruneJSON(raw json.RawMessage, c *pruneCtx) ([]byte, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
@@ -43,40 +76,41 @@ func PruneJSON(raw json.RawMessage, drop map[string]bool, lim Limits) ([]byte, e
 		if err := json.Unmarshal([]byte(s), &inner); err != nil {
 			return nil, err
 		}
-		b, err := json.Marshal(prune(inner, drop, lim))
+		b, err := json.Marshal(prune(inner, c))
 		if err != nil {
 			return nil, err
 		}
 		return json.Marshal(string(b))
 	}
-	return json.Marshal(prune(v, drop, lim))
+	return json.Marshal(prune(v, c))
 }
 
-func prune(v any, drop map[string]bool, lim Limits) any {
+func prune(v any, c *pruneCtx) any {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, val := range t {
-			if drop[k] {
+			if c.drop[k] {
 				delete(t, k)
 				continue
 			}
-			t[k] = prune(val, drop, lim)
+			t[k] = prune(val, c)
 		}
 		return t
 	case []any:
 		for i, val := range t {
-			t[i] = prune(val, drop, lim)
+			t[i] = prune(val, c)
 		}
-		return capItems(t, lim)
+		return capItems(t, c)
 	case string:
-		return capStr(t, lim.MaxStr)
+		return capStr(t, c)
 	default:
 		return v
 	}
 }
 
 // capItems keeps head, tail, and error-looking items, replacing the rest with a marker
-func capItems(t []any, lim Limits) []any {
+func capItems(t []any, c *pruneCtx) []any {
+	lim := c.lim
 	if lim.MaxItems <= 0 || len(t) <= lim.MaxItems {
 		return t
 	}
@@ -108,7 +142,8 @@ func capItems(t []any, lim Limits) []any {
 	if dropped == 0 {
 		return t
 	}
-	return append(out, fmt.Sprintf("[isthmos: %d of %d items truncated]", dropped, len(t)))
+	c.truncated = true
+	return append(out, fmt.Sprintf("[isthmos: %d of %d items truncated%s]", dropped, len(t), c.hint()))
 }
 
 var errStates = map[string]bool{
@@ -157,7 +192,8 @@ func truthy(v any) bool {
 }
 
 // capStr truncates a long string at a rune boundary, appending an explicit marker
-func capStr(s string, maxStr int) string {
+func capStr(s string, c *pruneCtx) string {
+	maxStr := c.lim.MaxStr
 	if maxStr <= 0 || len(s) <= maxStr {
 		return s
 	}
@@ -165,5 +201,6 @@ func capStr(s string, maxStr int) string {
 	for i > 0 && !utf8.RuneStart(s[i]) {
 		i--
 	}
-	return fmt.Sprintf("%s...[isthmos: %d bytes truncated]", s[:i], len(s)-i)
+	c.truncated = true
+	return fmt.Sprintf("%s...[isthmos: %d bytes truncated%s]", s[:i], len(s)-i, c.hint())
 }

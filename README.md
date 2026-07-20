@@ -123,6 +123,21 @@ TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   34
 `-file` points at a different log, `-since` bounds the window. The `~TOKENS`
 column is a rough 4-bytes-per-token estimate, not a tokenizer.
 
+## Reversibility
+
+Truncation is reversible. When items or bytes are cut, the original payload is
+encrypted (AES-256-GCM) into `~/.local/state/isthmos/store/` and the marker
+carries the recovery command:
+
+```
+[isthmos: 17 of 20 items truncated, full: isthmos reveal de6ac0410501901b]
+```
+
+An agent that needs the full payload can simply run that command; a human can
+too. Entries expire after 7 days. If the store cannot be written, isthmos does
+not truncate at all: a marker must never point at a payload that was not
+stored. Field-pruned payloads (no truncation) are not stored.
+
 ## Design constraints
 
 - No proxy in the credential path
