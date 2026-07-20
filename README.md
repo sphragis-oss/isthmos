@@ -26,7 +26,7 @@ command. Nothing leaves your machine and nothing sits in the credential path.
 
 ## Status
 
-Phase 1 shipped: rule-based JSON field pruning plus byte-level measurement.
+Early but working: rule-based JSON field pruning plus byte-level measurement.
 
 ## Why
 
@@ -95,14 +95,6 @@ emits a replacement when the result is strictly smaller.
 Every invocation appends one line to `~/.local/state/isthmos/measure.jsonl`
 with before/after byte counts per tool, so pruning rules are driven by real
 data, not guesses.
-
-## Planned phases
-
-1. ~~JSON field pruning for MCP tool outputs~~ (shipped)
-2. Measurement: real before/after token accounting
-3. Generic compressors per tool family
-4. Reversibility store: recover full payloads on demand
-5. Text compression
 
 ## Design constraints
 
