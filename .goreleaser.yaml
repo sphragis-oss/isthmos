@@ -51,15 +51,22 @@ signs:
       - "${artifact}"
       - "--yes"
 
-brews:
+homebrew_casks:
   - name: isthmos
+    binaries:
+      - isthmos
     repository:
       owner: sphragis-oss
       name: homebrew-sphragis
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/sphragis-oss/isthmos
     description: "Local context-compression layer for agent tool outputs"
-    license: "Apache-2.0"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/isthmos"]
+          end
 
 release:
   github:
