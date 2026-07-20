@@ -1,5 +1,20 @@
 # isthmos
 
+<p align="center">
+  <a href="https://github.com/sphragis-oss/isthmos/actions/workflows/ci.yml?query=branch%3Amain">
+    <img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/sphragis-oss/isthmos/ci.yml?branch=main&style=for-the-badge&label=tests">
+  </a>
+  <a href="https://github.com/sphragis-oss/isthmos/releases">
+    <img alt="Latest Release" src="https://img.shields.io/github/v/release/sphragis-oss/isthmos?include_prereleases&style=for-the-badge">
+  </a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/sphragis-oss/isthmos">
+    <img alt="OpenSSF Scorecard" src="https://img.shields.io/ossf-scorecard/github.com/sphragis-oss/isthmos?label=openssf%20scorecard&style=for-the-badge">
+  </a>
+  <a href="LICENSE">
+    <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge">
+  </a>
+</p>
+
 isthmos (Greek: ισθμός), the narrow passage your tool outputs squeeze through.
 
 A local context-compression layer for agent tool outputs. The core is
@@ -95,6 +110,16 @@ data, not guesses.
 - One static binary, fast cold start (runs on every tool call)
 - Fail-open: any error means untouched passthrough
 - Lossy steps must be reversible or clearly labelled
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+setup, style, and the DCO sign-off requirement, and
+[GOVERNANCE.md](GOVERNANCE.md) for how decisions get made. Security reports go
+through [SECURITY.md](SECURITY.md), never a public issue.
+
+Pruning rules are the highest-value contribution: bring one backed by real
+before/after byte counts.
 
 ## License
 

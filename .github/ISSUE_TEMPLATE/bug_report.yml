@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in isthmos misbehaves
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you see, what did you expect?
+      placeholder: Steps to reproduce, actual behavior, expected behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      description: How was isthmos invoked?
+      options:
+        - hook (Claude Code PostToolUse)
+        - filter (generic stdin/stdout)
+        - Go library
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: isthmos version, Go version, OS, and the agent or CLI you run it under.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Rules
+      description: The relevant parts of your rules file (redact anything sensitive).
+      render: json
+    validations:
+      required: false
+  - type: textarea
+    id: payload
+    attributes:
+      label: Input and output
+      description: A minimal tool payload that reproduces the problem, with what isthmos returned. Redact anything sensitive.
+      render: json
+    validations:
+      required: false

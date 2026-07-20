@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 import (
@@ -78,7 +80,9 @@ func runHook() {
 func runFilter(args []string) {
 	fs := flag.NewFlagSet("filter", flag.ExitOnError)
 	tool := fs.String("tool", "", "tool name matched against rule globs")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
 	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		slog.Error("read stdin", "err", err)
@@ -87,5 +91,8 @@ func runFilter(args []string) {
 	rs := isthmos.LoadRules(configPath())
 	out, _ := isthmos.Apply(rs, *tool, raw)
 	logMeasure(*tool, len(raw), len(out))
-	os.Stdout.Write(out)
+	if _, err := os.Stdout.Write(out); err != nil {
+		slog.Error("write stdout", "err", err)
+		os.Exit(1)
+	}
 }
