@@ -12,11 +12,11 @@ import (
 )
 
 func measurePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	d := stateDir()
+	if d == "" {
 		return ""
 	}
-	return filepath.Join(home, ".local", "state", "isthmos", "measure.jsonl")
+	return filepath.Join(d, "measure.jsonl")
 }
 
 // logMeasure appends one JSONL line, best effort

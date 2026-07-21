@@ -98,6 +98,32 @@ func TestFilterShadowPassthrough(t *testing.T) {
 	}
 }
 
+func TestDoctorHealthy(t *testing.T) {
+	setupEnv(t)
+	var out bytes.Buffer
+	if code := runDoctor(&out); code != 0 {
+		t.Fatalf("healthy setup reported code %d: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "ok, 1 rules") {
+		t.Fatalf("doctor missed the rules file: %s", out.String())
+	}
+}
+
+func TestDoctorFailsOnBadRules(t *testing.T) {
+	home := setupEnv(t)
+	rules := filepath.Join(home, "rules.json")
+	if err := os.WriteFile(rules, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if code := runDoctor(&out); code != 1 {
+		t.Fatalf("broken rules must fail doctor: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "FAIL") {
+		t.Fatalf("doctor output has no FAIL line: %s", out.String())
+	}
+}
+
 func TestFilterRewrites(t *testing.T) {
 	setupEnv(t)
 	var out bytes.Buffer
