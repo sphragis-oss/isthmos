@@ -22,3 +22,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `min_bytes` per rule: payloads below the threshold pass through untouched.
 - Reversibility store: truncated originals are AES-256-GCM encrypted under `~/.local/state/isthmos/store/` with a 7-day TTL, markers carry `isthmos reveal <id>`, and a new `reveal` subcommand recovers the full payload.
 - Shadow mode (`ISTHMOS_SHADOW=1`): measure what the rules would save without rewriting anything, for safe rollout on a new machine.
+- `isthmos doctor`: one-look health check of rules, store, measurement log, hook wiring, and shadow status.
+- End-to-end smoke test (`make e2e`) exercising the built binary, wired into CI on Linux and macOS.

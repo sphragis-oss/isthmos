@@ -64,6 +64,22 @@ Stdin in, pruned stdout out. Wire it into any wrapper, shell function, or
 orchestrator that can interpose a pipe. Non-JSON payloads pass through
 untouched.
 
+### Checking your setup
+
+```
+$ isthmos doctor
+version: 0.1.0
+rules:   /Users/you/.config/isthmos/rules.json: ok, 4 rules
+store:   ok, 12 entries
+measure: /Users/you/.local/state/isthmos/measure.jsonl: 84.2KB, last write 2026-07-21T09:14:02Z
+hook:    wired in ~/.claude/settings.json
+shadow:  off
+```
+
+Exits non-zero when something is actually broken (unreadable or invalid rules,
+unusable store); a missing rules file is just reported, since no rules means
+isthmos is a deliberate no-op.
+
 ### As a Go library
 
 ```go

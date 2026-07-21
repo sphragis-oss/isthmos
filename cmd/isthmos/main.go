@@ -43,13 +43,21 @@ func shadowMode() bool {
 	return v == "1" || v == "true"
 }
 
-// openStore is fail-open: on any error pruning proceeds without reversibility
-func openStore() *isthmos.Store {
+func stateDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".local", "state", "isthmos")
+}
+
+// openStore is fail-open: on any error pruning proceeds without reversibility
+func openStore() *isthmos.Store {
+	d := stateDir()
+	if d == "" {
 		return nil
 	}
-	st, err := isthmos.OpenStore(filepath.Join(home, ".local", "state", "isthmos", "store"), 7*24*time.Hour)
+	st, err := isthmos.OpenStore(filepath.Join(d, "store"), 7*24*time.Hour)
 	if err != nil {
 		slog.Error("open store", "err", err)
 		return nil
@@ -74,10 +82,12 @@ func main() {
 		runStats(args)
 	case "reveal":
 		runReveal(args)
+	case "doctor":
+		os.Exit(runDoctor(os.Stdout))
 	case "version":
 		fmt.Println(version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|stats|reveal <id>|version]")
+		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|stats|reveal <id>|doctor|version]")
 		os.Exit(2)
 	}
 }
