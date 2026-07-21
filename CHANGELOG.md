@@ -21,3 +21,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Smarter array truncation: `keep_last` keeps the newest items and error-looking items are never dropped.
 - `min_bytes` per rule: payloads below the threshold pass through untouched.
 - Reversibility store: truncated originals are AES-256-GCM encrypted under `~/.local/state/isthmos/store/` with a 7-day TTL, markers carry `isthmos reveal <id>`, and a new `reveal` subcommand recovers the full payload.
+- Shadow mode (`ISTHMOS_SHADOW=1`): measure what the rules would save without rewriting anything, for safe rollout on a new machine.
