@@ -37,6 +37,12 @@ func configPath() string {
 	return filepath.Join(home, ".config", "isthmos", "rules.json")
 }
 
+// shadowMode measures what pruning would save without rewriting anything
+func shadowMode() bool {
+	v := os.Getenv("ISTHMOS_SHADOW")
+	return v == "1" || v == "true"
+}
+
 // openStore is fail-open: on any error pruning proceeds without reversibility
 func openStore() *isthmos.Store {
 	home, err := os.UserHomeDir()
@@ -61,9 +67,9 @@ func main() {
 	}
 	switch mode {
 	case "hook":
-		runHook()
+		runHook(os.Stdin, os.Stdout)
 	case "filter":
-		runFilter(args)
+		runFilter(args, os.Stdin, os.Stdout)
 	case "stats":
 		runStats(args)
 	case "reveal":
@@ -77,8 +83,8 @@ func main() {
 }
 
 // runHook is the Claude Code PostToolUse adapter, fail-open on any error
-func runHook() {
-	raw, err := io.ReadAll(os.Stdin)
+func runHook(stdin io.Reader, stdout io.Writer) {
+	raw, err := io.ReadAll(stdin)
 	if err != nil {
 		slog.Error("read stdin", "err", err)
 		return
@@ -89,33 +95,44 @@ func runHook() {
 		return
 	}
 	rs := isthmos.LoadRules(configPath())
-	out, changed := isthmos.ApplyWithStore(rs, in.ToolName, in.ToolOutput, openStore())
+	var st *isthmos.Store
+	if !shadowMode() {
+		st = openStore()
+	}
+	out, changed := isthmos.ApplyWithStore(rs, in.ToolName, in.ToolOutput, st)
 	logMeasure(in.ToolName, len(in.ToolOutput), len(out))
-	if !changed {
+	if !changed || shadowMode() {
 		return
 	}
 	res := hookOutput{hookSpecificOutput{"PostToolUse", out}}
-	if err := json.NewEncoder(os.Stdout).Encode(res); err != nil {
+	if err := json.NewEncoder(stdout).Encode(res); err != nil {
 		slog.Error("write hook output", "err", err)
 	}
 }
 
 // runFilter is the agent-agnostic mode: raw output on stdin, pruned on stdout
-func runFilter(args []string) {
+func runFilter(args []string, stdin io.Reader, stdout io.Writer) {
 	fs := flag.NewFlagSet("filter", flag.ExitOnError)
 	tool := fs.String("tool", "", "tool name matched against rule globs")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
-	raw, err := io.ReadAll(os.Stdin)
+	raw, err := io.ReadAll(stdin)
 	if err != nil {
 		slog.Error("read stdin", "err", err)
 		os.Exit(1)
 	}
 	rs := isthmos.LoadRules(configPath())
-	out, _ := isthmos.ApplyWithStore(rs, *tool, raw, openStore())
+	var st *isthmos.Store
+	if !shadowMode() {
+		st = openStore()
+	}
+	out, _ := isthmos.ApplyWithStore(rs, *tool, raw, st)
 	logMeasure(*tool, len(raw), len(out))
-	if _, err := os.Stdout.Write(out); err != nil {
+	if shadowMode() {
+		out = raw
+	}
+	if _, err := stdout.Write(out); err != nil {
 		slog.Error("write stdout", "err", err)
 		os.Exit(1)
 	}

@@ -123,6 +123,18 @@ TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   34
 `-file` points at a different log, `-since` bounds the window. The `~TOKENS`
 column is a rough 4-bytes-per-token estimate, not a tokenizer.
 
+### Shadow mode
+
+Set `ISTHMOS_SHADOW=1` to measure without rewriting: isthmos computes what the
+rules would save and logs it, but the hook emits nothing and `filter` passes
+stdin through untouched. Nothing is written to the reversibility store. Use it
+to trial rules on a new machine, then unset it once `isthmos stats` shows the
+savings are worth it:
+
+```json
+{"type": "command", "command": "ISTHMOS_SHADOW=1 $HOME/.local/bin/isthmos hook", "timeout": 5}
+```
+
 ## Reversibility
 
 Truncation is reversible. When items or bytes are cut, the original payload is
