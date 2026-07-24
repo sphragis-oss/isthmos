@@ -17,7 +17,17 @@ func compressText(s string, c *pruneCtx) string {
 		lines = dedupLines(lines)
 	}
 	if c.lim.MaxLines > 0 && len(lines) > c.lim.MaxLines {
-		lines = capLines(lines, c)
+		// a trailing newline is not a line: keep it out of the budget
+		trailing := lines[len(lines)-1] == ""
+		if trailing {
+			lines = lines[:len(lines)-1]
+		}
+		if len(lines) > c.lim.MaxLines {
+			lines = capLines(lines, c)
+		}
+		if trailing {
+			lines = append(lines, "")
+		}
 	}
 	return strings.Join(lines, "\n")
 }

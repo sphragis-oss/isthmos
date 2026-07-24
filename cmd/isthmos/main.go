@@ -160,7 +160,7 @@ func runReveal(args []string) {
 	}
 	b, err := st.Load(args[0])
 	if err != nil {
-		slog.Error("reveal", "id", args[0], "err", err)
+		fmt.Fprintf(os.Stderr, "isthmos: entry %s is expired or unknown; the original payload is no longer stored, re-run the tool if you need the full output\n", args[0])
 		os.Exit(1)
 	}
 	logReveal(st.Tool(args[0]))

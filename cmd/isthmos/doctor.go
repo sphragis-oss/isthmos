@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sphragis-oss/isthmos"
@@ -20,6 +22,7 @@ func runDoctor(w io.Writer) int {
 	code := 0
 	fmt.Fprintf(w, "version: %s\n", version)
 
+	var rules isthmos.Rules
 	p := configPath()
 	switch b, err := os.ReadFile(p); {
 	case errors.Is(err, os.ErrNotExist):
@@ -28,12 +31,11 @@ func runDoctor(w io.Writer) int {
 		code = 1
 		fmt.Fprintf(w, "rules:   %s: FAIL %v\n", p, err)
 	default:
-		var rs isthmos.Rules
-		if err := json.Unmarshal(b, &rs); err != nil {
+		if err := json.Unmarshal(b, &rules); err != nil {
 			code = 1
 			fmt.Fprintf(w, "rules:   %s: FAIL invalid JSON: %v\n", p, err)
 		} else {
-			fmt.Fprintf(w, "rules:   %s: ok, %d rules\n", p, len(rs.Rules))
+			fmt.Fprintf(w, "rules:   %s: ok, %d rules\n", p, len(rules.Rules))
 		}
 	}
 
@@ -74,6 +76,9 @@ func runDoctor(w io.Writer) int {
 	home, _ := os.UserHomeDir()
 	if b, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil && bytes.Contains(b, []byte("isthmos")) {
 		fmt.Fprintln(w, "hook:    wired in ~/.claude/settings.json")
+		for _, r := range deadRules(rules, b) {
+			fmt.Fprintf(w, "hook:    WARN rule %q not routed by any isthmos hook matcher\n", r)
+		}
 	} else {
 		fmt.Fprintln(w, "hook:    not in ~/.claude/settings.json (fine if you use filter mode)")
 	}
@@ -84,4 +89,53 @@ func runDoctor(w io.Writer) int {
 		fmt.Fprintln(w, "shadow:  off")
 	}
 	return code
+}
+
+type hookSettings struct {
+	Hooks struct {
+		PostToolUse []struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"PostToolUse"`
+	} `json:"hooks"`
+}
+
+// deadRules lists rule globs no isthmos hook matcher routes to
+func deadRules(rs isthmos.Rules, settings []byte) []string {
+	var s hookSettings
+	if json.Unmarshal(settings, &s) != nil {
+		return nil
+	}
+	var matchers []*regexp.Regexp
+	for _, e := range s.Hooks.PostToolUse {
+		for _, h := range e.Hooks {
+			if strings.Contains(h.Command, "isthmos") {
+				if re, err := regexp.Compile("^(?:" + e.Matcher + ")$"); err == nil {
+					matchers = append(matchers, re)
+				}
+				break
+			}
+		}
+	}
+	if len(matchers) == 0 {
+		return nil
+	}
+	var dead []string
+	for _, r := range rs.Rules {
+		// a representative tool name stands in for the glob
+		sample := strings.ReplaceAll(r.Tool, "*", "x")
+		routed := false
+		for _, re := range matchers {
+			if re.MatchString(sample) {
+				routed = true
+				break
+			}
+		}
+		if !routed {
+			dead = append(dead, r.Tool)
+		}
+	}
+	return dead
 }

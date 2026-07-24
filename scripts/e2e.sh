@@ -30,6 +30,9 @@ id=$(echo "$out" | grep -oE 'isthmos reveal [0-9a-f]{16}' | awk '{print $3}')
 [[ -n "$id" ]] || fail "marker has no reveal id"
 [[ "$("$bin" reveal "$id")" == "$big" ]] || fail "reveal did not return the original"
 
+unknown=$("$bin" reveal 0123456789abcdef 2>&1) && fail "unknown reveal id must exit non-zero"
+[[ "$unknown" == *"expired or unknown"* ]] || fail "unknown reveal id has no clear message: $unknown"
+
 out=$(echo "$small" | ISTHMOS_SHADOW=1 "$bin" filter -tool mcp__github__x)
 [[ "$out" == "$small" ]] || fail "shadow filter rewrote the payload"
 
