@@ -14,8 +14,10 @@ type Rule struct {
 	DropKeys []string `json:"drop_keys"`
 	MaxItems int      `json:"max_items,omitempty"`
 	MaxStr   int      `json:"max_str,omitempty"`
+	MaxLines int      `json:"max_lines,omitempty"`
 	KeepLast int      `json:"keep_last,omitempty"`
 	MinBytes int      `json:"min_bytes,omitempty"`
+	Dedup    bool     `json:"dedup,omitempty"`
 }
 
 type Rules struct {
@@ -61,8 +63,14 @@ func (rs Rules) LimitsFor(tool string) Limits {
 		if r.MaxStr > 0 && (lim.MaxStr == 0 || r.MaxStr < lim.MaxStr) {
 			lim.MaxStr = r.MaxStr
 		}
+		if r.MaxLines > 0 && (lim.MaxLines == 0 || r.MaxLines < lim.MaxLines) {
+			lim.MaxLines = r.MaxLines
+		}
 		if r.KeepLast > lim.KeepLast {
 			lim.KeepLast = r.KeepLast
+		}
+		if r.Dedup {
+			lim.Dedup = true
 		}
 	}
 	return lim
