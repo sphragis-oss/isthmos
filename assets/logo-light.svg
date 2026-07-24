@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="isthmos">
+  <title>isthmos</title>
+  <g fill="none" stroke="#14161c" stroke-width="2.6" stroke-linecap="round">
+    <path d="M20 5C29 17 29 47 20 59"/>
+    <path d="M11 8C19 19 19 45 11 56"/>
+    <path d="M44 5C35 17 35 47 44 59"/>
+    <path d="M53 8C45 19 45 45 53 56"/>
+  </g>
+  <path fill="none" stroke="#257d98" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 6.5" d="M32 6V58"/>
+</svg>
