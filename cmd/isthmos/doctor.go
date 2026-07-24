@@ -62,7 +62,7 @@ func runDoctor(w io.Writer) int {
 				calls += s.Calls
 				in += s.InBytes
 			}
-			f.Close()
+			_ = f.Close()
 			// a firing hook that only ever sees empty payloads is miswired
 			if calls >= 5 && in == 0 {
 				code = 1
