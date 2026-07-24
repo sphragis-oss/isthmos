@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sphragis-oss/isthmos"
 )
@@ -121,6 +122,59 @@ func TestDoctorFailsOnBadRules(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "FAIL") {
 		t.Fatalf("doctor output has no FAIL line: %s", out.String())
+	}
+}
+
+func TestDoctorFailsOnAllZeroPayloads(t *testing.T) {
+	home := setupEnv(t)
+	dir := filepath.Join(home, ".local", "state", "isthmos")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var lines bytes.Buffer
+	enc := json.NewEncoder(&lines)
+	for i := 0; i < 6; i++ {
+		if err := enc.Encode(isthmos.Measure{TS: time.Now().UTC(), Tool: "Bash"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "measure.jsonl"), lines.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if code := runDoctor(&out); code != 1 {
+		t.Fatalf("all-zero payloads must fail doctor: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "payload: FAIL") {
+		t.Fatalf("doctor output has no payload FAIL line: %s", out.String())
+	}
+}
+
+func TestMeasureTrimKeepsNewestLines(t *testing.T) {
+	setupEnv(t)
+	old := measureCap
+	measureCap = 2048
+	t.Cleanup(func() { measureCap = old })
+	for i := 0; i < 100; i++ {
+		logMeasure("Bash", i, i)
+	}
+	fi, err := os.Stat(measurePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() > measureCap+256 {
+		t.Fatalf("log not trimmed: %d bytes", fi.Size())
+	}
+	b, err := os.ReadFile(measurePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m isthmos.Measure
+	if err := json.Unmarshal(bytes.SplitN(b, []byte("\n"), 2)[0], &m); err != nil {
+		t.Fatalf("first line after trim is not valid JSON: %v", err)
+	}
+	if !bytes.Contains(b, []byte(`"in_bytes":99`)) {
+		t.Fatalf("newest line lost by trim")
 	}
 }
 
