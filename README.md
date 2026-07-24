@@ -134,10 +134,10 @@ untouched, so pruning rules are driven by real data, not guesses.
 
 ```
 $ isthmos stats -since 168h
-TOOL                                      CALLS  IN     OUT    SAVED  SAVED%  %ALL   ~TOKENS
-mcp__atlassian__searchJiraIssuesUsingJql  42     1.9MB  0.6MB  1.3MB  68.4%   68.0%  340787
-mcp__github__get_me                       7      12.3KB 4.1KB  8.2KB  66.7%   0.4%   2099
-TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   68.4%  342886
+TOOL                                      CALLS  IN     OUT    SAVED  SAVED%  %ALL   ~TOKENS  REVEALS
+mcp__atlassian__searchJiraIssuesUsingJql  42     1.9MB  0.6MB  1.3MB  68.4%   68.0%  340787   3
+mcp__github__get_me                       7      12.3KB 4.1KB  8.2KB  66.7%   0.4%   2099     0
+TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   68.4%  342886   3
 scope: only tool calls that reached isthmos; whole-session context is a larger denominator
 ```
 
@@ -149,6 +149,11 @@ traces show repeated context (system prompt, history) is typically the far
 larger consumer.
 `-file` points at a different log, `-since` bounds the window. The `~TOKENS`
 column is a rough 4-bytes-per-token estimate, not a tokenizer.
+
+`REVEALS` counts `isthmos reveal` recoveries attributed to each tool. A reveal
+means a rule cut something the agent then had to fetch back, paying an extra
+tool call, so a tool with a rising reveal count is over-pruned: loosen its
+rule instead of celebrating its `SAVED%`.
 
 ### Shadow mode
 

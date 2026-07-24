@@ -72,7 +72,7 @@ func (s *Store) gcm() (cipher.AEAD, error) {
 }
 
 // Save seals the payload under id and opportunistically drops expired entries
-func (s *Store) Save(id string, payload []byte) error {
+func (s *Store) Save(id string, payload []byte, tool string) error {
 	if !validID(id) {
 		return errors.New("invalid store id")
 	}
@@ -88,8 +88,24 @@ func (s *Store) Save(id string, payload []byte) error {
 	if err := os.WriteFile(filepath.Join(s.dir, id+".bin"), sealed, 0o600); err != nil {
 		return err
 	}
+	if tool != "" {
+		// best effort: attribution sidecar, reveal still works without it
+		_ = os.WriteFile(filepath.Join(s.dir, id+".meta"), []byte(tool), 0o600)
+	}
 	s.gc()
 	return nil
+}
+
+// Tool returns the tool name an entry was saved for, or "" when unknown
+func (s *Store) Tool(id string) string {
+	if !validID(id) {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(s.dir, id+".meta"))
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // Load opens the sealed payload for id
@@ -122,7 +138,7 @@ func (s *Store) gc() {
 		return
 	}
 	for _, e := range entries {
-		if filepath.Ext(e.Name()) != ".bin" {
+		if ext := filepath.Ext(e.Name()); ext != ".bin" && ext != ".meta" {
 			continue
 		}
 		info, err := e.Info()

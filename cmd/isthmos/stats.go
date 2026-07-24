@@ -41,15 +41,16 @@ func runStats(args []string) {
 		tot.Calls += s.Calls
 		tot.InBytes += s.InBytes
 		tot.OutBytes += s.OutBytes
+		tot.Reveals += s.Reveals
 	}
 	w := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "TOOL\tCALLS\tIN\tOUT\tSAVED\tSAVED%\t%ALL\t~TOKENS")
+	fmt.Fprintln(w, "TOOL\tCALLS\tIN\tOUT\tSAVED\tSAVED%\t%ALL\t~TOKENS\tREVEALS")
 	for _, s := range stats {
-		fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\n",
-			s.Tool, s.Calls, human(s.InBytes), human(s.OutBytes), human(s.Saved()), pct(s.Saved(), s.InBytes), pct(s.Saved(), tot.InBytes), isthmos.EstTokens(s.Saved()))
+		fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%d\n",
+			s.Tool, s.Calls, human(s.InBytes), human(s.OutBytes), human(s.Saved()), pct(s.Saved(), s.InBytes), pct(s.Saved(), tot.InBytes), isthmos.EstTokens(s.Saved()), s.Reveals)
 	}
-	fmt.Fprintf(w, "TOTAL\t%d\t%s\t%s\t%s\t%s\t%s\t%d\n",
-		tot.Calls, human(tot.InBytes), human(tot.OutBytes), human(tot.Saved()), pct(tot.Saved(), tot.InBytes), pct(tot.Saved(), tot.InBytes), isthmos.EstTokens(tot.Saved()))
+	fmt.Fprintf(w, "TOTAL\t%d\t%s\t%s\t%s\t%s\t%s\t%d\t%d\n",
+		tot.Calls, human(tot.InBytes), human(tot.OutBytes), human(tot.Saved()), pct(tot.Saved(), tot.InBytes), pct(tot.Saved(), tot.InBytes), isthmos.EstTokens(tot.Saved()), tot.Reveals)
 	if err := w.Flush(); err != nil {
 		slog.Error("write stats", "err", err)
 		os.Exit(1)

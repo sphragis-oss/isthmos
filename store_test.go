@@ -26,7 +26,7 @@ func TestStoreRoundtrip(t *testing.T) {
 	st := testStore(t)
 	id := newID()
 	payload := []byte(`{"secret":"original payload"}`)
-	if err := st.Save(id, payload); err != nil {
+	if err := st.Save(id, payload, "mcp__x__y"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.Load(id)
@@ -42,7 +42,7 @@ func TestStoreEncryptsAtRest(t *testing.T) {
 	st := testStore(t)
 	id := newID()
 	payload := []byte("plaintext-marker-abcdef")
-	if err := st.Save(id, payload); err != nil {
+	if err := st.Save(id, payload, "mcp__x__y"); err != nil {
 		t.Fatal(err)
 	}
 	onDisk, err := os.ReadFile(filepath.Join(st.dir, id+".bin"))
@@ -66,21 +66,43 @@ func TestStoreRejectsBadIDs(t *testing.T) {
 func TestStoreGCExpiresOldEntries(t *testing.T) {
 	st := testStore(t)
 	old, fresh := newID(), newID()
-	if err := st.Save(old, []byte("old")); err != nil {
+	if err := st.Save(old, []byte("old"), "mcp__x__y"); err != nil {
 		t.Fatal(err)
 	}
 	stale := time.Now().Add(-2 * time.Hour)
-	if err := os.Chtimes(filepath.Join(st.dir, old+".bin"), stale, stale); err != nil {
-		t.Fatal(err)
+	for _, ext := range []string{".bin", ".meta"} {
+		if err := os.Chtimes(filepath.Join(st.dir, old+ext), stale, stale); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := st.Save(fresh, []byte("fresh")); err != nil {
+	if err := st.Save(fresh, []byte("fresh"), "mcp__x__y"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.Load(old); err == nil {
 		t.Fatal("expired entry survived gc")
 	}
+	if st.Tool(old) != "" {
+		t.Fatal("expired meta survived gc")
+	}
 	if _, err := st.Load(fresh); err != nil {
 		t.Fatalf("fresh entry lost: %v", err)
+	}
+}
+
+func TestStoreToolAttribution(t *testing.T) {
+	st := testStore(t)
+	id := newID()
+	if err := st.Save(id, []byte("payload"), "mcp__atlassian__search"); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Tool(id); got != "mcp__atlassian__search" {
+		t.Fatalf("expected tool attribution, got %q", got)
+	}
+	if got := st.Tool(newID()); got != "" {
+		t.Fatalf("missing meta should mean empty tool, got %q", got)
+	}
+	if got := st.Tool("../../etc/passwd!"); got != "" {
+		t.Fatalf("bad id should mean empty tool, got %q", got)
 	}
 }
 
