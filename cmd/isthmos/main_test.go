@@ -150,6 +150,31 @@ func TestDoctorFailsOnAllZeroPayloads(t *testing.T) {
 	}
 }
 
+func TestDoctorWarnsOnDeadRule(t *testing.T) {
+	home := setupEnv(t)
+	rules := filepath.Join(home, "rules.json")
+	if err := os.WriteFile(rules, []byte(`{"rules":[{"tool":"mcp__*","drop_keys":["noise"]},{"tool":"Read","max_lines":100}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"hooks":{"PostToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"isthmos hook"}]}]}}`
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if code := runDoctor(&out); code != 0 {
+		t.Fatalf("dead rule is a warning, not a failure: %s", out.String())
+	}
+	if !strings.Contains(out.String(), `WARN rule "Read"`) {
+		t.Fatalf("doctor missed the dead Read rule: %s", out.String())
+	}
+	if strings.Contains(out.String(), `WARN rule "mcp__*"`) {
+		t.Fatalf("routed rule wrongly flagged: %s", out.String())
+	}
+}
+
 func TestMeasureTrimKeepsNewestLines(t *testing.T) {
 	setupEnv(t)
 	old := measureCap

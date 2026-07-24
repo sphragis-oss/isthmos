@@ -79,6 +79,22 @@ func TestCapLinesUntouchedWhenUnderLimit(t *testing.T) {
 	}
 }
 
+func TestCapLinesTrailingNewlineNotBudgeted(t *testing.T) {
+	var lines []string
+	for i := 0; i < 10; i++ {
+		lines = append(lines, fmt.Sprintf("l%d", i))
+	}
+	in := strings.Join(lines, "\n") + "\n"
+	c := textCtx(Limits{MaxLines: 4, KeepLast: 2})
+	got := compressText(in, c)
+	if !strings.HasSuffix(got, "l8\nl9\n") {
+		t.Fatalf("trailing newline ate a keep_last slot: %q", got)
+	}
+	if !strings.Contains(got, "6 of 10 lines truncated") {
+		t.Fatalf("marker counts the trailing newline: %q", got)
+	}
+}
+
 func TestApplyRawTextPayload(t *testing.T) {
 	rs := Rules{Rules: []Rule{{Tool: "Bash", MaxLines: 4, KeepLast: 1}}}
 	in := []byte(strings.Repeat("log line with some padding\n", 50) + "final")

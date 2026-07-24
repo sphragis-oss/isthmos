@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `doctor` fails when the hook keeps firing on empty payloads (5+ recent calls, all 0 bytes), the signature of a wiring or input-field mismatch that silently disabled isthmos before v0.2.0.
 - The measurement log is capped at 5MB; the oldest half is trimmed when it grows past that.
+- `reveal` prints a clear "expired or unknown" message for a missing store entry instead of a raw file error, so an agent can recover by re-running the tool.
+- `doctor` warns about dead rules: rule globs no isthmos PostToolUse matcher routes to.
+
+### Fixed
+
+- A trailing newline no longer consumes a `keep_last` slot or counts as a truncated line in `max_lines` markers.
 
 ## [0.2.0] - 2026-07-24
 
