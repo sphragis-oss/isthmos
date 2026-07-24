@@ -46,6 +46,33 @@ save on your traffic before anything is rewritten. A per-tool saving is a
 local percentage, not a whole-task cost reduction; isthmos claims neither and
 reports both the local number and its share of everything it measured.
 
+## Install
+
+Via Homebrew (macOS / Linux):
+
+```sh
+brew install --cask sphragis-oss/sphragis/isthmos
+```
+
+Or with Go:
+
+```sh
+go install github.com/sphragis-oss/isthmos/cmd/isthmos@latest
+```
+
+Or from source:
+
+```sh
+git clone https://github.com/sphragis-oss/isthmos.git
+cd isthmos
+make install PREFIX=$HOME/.local
+```
+
+Release artifacts ship with checksums, a cosign-signed bundle, SBOMs, and build
+provenance; [SECURITY.md](SECURITY.md) shows how to verify them. The hook
+example below points at `$HOME/.local/bin/isthmos`; adjust it to wherever your
+install landed (`which isthmos`).
+
 ## Usage
 
 ### Claude Code (native hook)
