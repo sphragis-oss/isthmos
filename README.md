@@ -20,7 +20,7 @@ isthmos (Greek: ισθμός), the narrow passage your tool outputs squeeze thro
 A local context-compression layer for agent tool outputs. The core is
 agent-agnostic: JSON field pruning driven by per-tool rules, importable as a Go
 package. Adapters connect it to whatever runs your LLM: a native Claude Code
-PostToolUse hook that rewrites `tool_output` via `updatedToolOutput`, and a
+PostToolUse hook that rewrites `tool_response` via `updatedToolOutput`, and a
 generic `filter` mode that works with any agent or CLI that can pipe through a
 command. Nothing leaves your machine and nothing sits in the credential path.
 
@@ -114,12 +114,13 @@ N bytes (at a rune boundary). Both replace the removed tail with an explicit
 truncation is never silent. When several rules match, the strictest positive
 limit wins.
 
-Plain-text payloads (raw bytes, or a JSON string carrying file contents or
-logs) get their own limits: `max_lines` keeps head and tail lines with the
-same reversible marker, and `dedup` collapses runs of 3 or more identical
-lines into a labelled count. Error-looking lines (`error`, `fatal`, `panic`,
-`traceback`, ...) are never dropped by `max_lines`. JSON payloads are
-untouched by these two.
+Text payloads get their own limits: `max_lines` keeps head and tail lines
+with the same reversible marker, and `dedup` collapses runs of 3 or more
+identical lines into a labelled count. Error-looking lines (`error`, `fatal`,
+`panic`, `traceback`, ...) are never dropped by `max_lines`. Both apply to
+raw non-JSON payloads, to a JSON string carrying text, and to long strings
+embedded in JSON objects, which is where real hook payloads keep their text
+(`stdout` for Bash, `file.content` for Read).
 
 Truncation is head-and-tail, not naive: `keep_last` reserves part of the
 `max_items` budget for the newest entries, and items that look like errors

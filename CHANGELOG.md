@@ -11,7 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `%ALL` column and scope note in `isthmos stats`: each tool's saving shown against all measured traffic, not just its own denominator.
 - Reveal tracking: `isthmos reveal` logs a per-tool event and `stats` reports a `REVEALS` column, an over-pruning signal (each reveal is an extra tool call recovering truncated data).
-- Text compression for plain-text payloads: `max_lines` head-and-tail line truncation with error-line pinning and the same reversible markers, and `dedup` collapsing runs of 3+ identical lines into a labelled count. Applies to raw non-JSON payloads and JSON strings carrying text (file contents, logs).
+- Text compression for text payloads: `max_lines` head-and-tail line truncation with error-line pinning and the same reversible markers, and `dedup` collapsing runs of 3+ identical lines into a labelled count. Applies to raw non-JSON payloads, JSON strings carrying text, and long strings embedded in JSON objects (`stdout` for Bash, `file.content` for Read).
+
+### Fixed
+
+- Hook adapter now reads the tool payload from `tool_response`, the field Claude Code actually sends on PostToolUse. It previously read a nonexistent `tool_output` field, so on real Claude Code traffic the hook always saw an empty payload and never rewrote anything.
 
 ### Changed
 

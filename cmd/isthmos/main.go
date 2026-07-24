@@ -16,8 +16,8 @@ import (
 )
 
 type hookInput struct {
-	ToolName   string          `json:"tool_name"`
-	ToolOutput json.RawMessage `json:"tool_output"`
+	ToolName     string          `json:"tool_name"`
+	ToolResponse json.RawMessage `json:"tool_response"`
 }
 
 type hookSpecificOutput struct {
@@ -109,8 +109,8 @@ func runHook(stdin io.Reader, stdout io.Writer) {
 	if !shadowMode() {
 		st = openStore()
 	}
-	out, changed := isthmos.ApplyWithStore(rs, in.ToolName, in.ToolOutput, st)
-	logMeasure(in.ToolName, len(in.ToolOutput), len(out))
+	out, changed := isthmos.ApplyWithStore(rs, in.ToolName, in.ToolResponse, st)
+	logMeasure(in.ToolName, len(in.ToolResponse), len(out))
 	if !changed || shadowMode() {
 		return
 	}

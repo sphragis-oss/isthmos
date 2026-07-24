@@ -20,7 +20,7 @@ out=$(echo "$small" | "$bin" filter -tool mcp__github__x)
 [[ "$out" != *noise* ]] || fail "filter kept a dropped key"
 [[ "$out" == *keep* ]] || fail "filter lost a kept key"
 
-out=$(echo "{\"tool_name\":\"mcp__github__x\",\"tool_output\":$small}" | "$bin" hook)
+out=$(echo "{\"tool_name\":\"mcp__github__x\",\"tool_response\":$small}" | "$bin" hook)
 [[ "$out" == *updatedToolOutput* ]] || fail "hook emitted no rewrite"
 [[ "$out" != *noise* ]] || fail "hook kept a dropped key"
 
