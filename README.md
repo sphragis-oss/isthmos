@@ -26,7 +26,8 @@ command. Nothing leaves your machine and nothing sits in the credential path.
 
 ## Status
 
-Early but working: rule-based JSON field pruning plus byte-level measurement.
+Early but working: rule-based JSON field pruning, text compression for
+plain-text payloads, plus byte-level measurement.
 
 ## Why
 
@@ -65,7 +66,7 @@ some-tool --json | isthmos filter -tool mcp__github__search_repos
 
 Stdin in, pruned stdout out. Wire it into any wrapper, shell function, or
 orchestrator that can interpose a pipe. Non-JSON payloads pass through
-untouched.
+untouched unless a matching rule sets the text limits below.
 
 ### Checking your setup
 
@@ -112,6 +113,13 @@ N bytes (at a rune boundary). Both replace the removed tail with an explicit
 `[isthmos: ... truncated]` marker so the model knows the payload is partial;
 truncation is never silent. When several rules match, the strictest positive
 limit wins.
+
+Plain-text payloads (raw bytes, or a JSON string carrying file contents or
+logs) get their own limits: `max_lines` keeps head and tail lines with the
+same reversible marker, and `dedup` collapses runs of 3 or more identical
+lines into a labelled count. Error-looking lines (`error`, `fatal`, `panic`,
+`traceback`, ...) are never dropped by `max_lines`. JSON payloads are
+untouched by these two.
 
 Truncation is head-and-tail, not naive: `keep_last` reserves part of the
 `max_items` budget for the newest entries, and items that look like errors

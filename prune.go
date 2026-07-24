@@ -12,10 +12,16 @@ import (
 type Limits struct {
 	MaxItems int
 	MaxStr   int
+	MaxLines int
 	KeepLast int
+	Dedup    bool
 }
 
-func (l Limits) empty() bool { return l.MaxItems == 0 && l.MaxStr == 0 }
+func (l Limits) empty() bool {
+	return l.MaxItems == 0 && l.MaxStr == 0 && l.MaxLines == 0 && !l.Dedup
+}
+
+func (l Limits) text() bool { return l.MaxLines > 0 || l.Dedup }
 
 type pruneCtx struct {
 	drop      map[string]bool
@@ -69,11 +75,19 @@ func PruneJSON(raw json.RawMessage, drop map[string]bool, lim Limits) ([]byte, e
 func pruneJSON(raw json.RawMessage, c *pruneCtx) ([]byte, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
+		// not JSON at all: the text path is the only one that can help
+		if c.lim.text() {
+			return []byte(compressText(string(raw), c)), nil
+		}
 		return nil, err
 	}
 	if s, ok := v.(string); ok {
 		var inner any
 		if err := json.Unmarshal([]byte(s), &inner); err != nil {
+			// a JSON string carrying plain text (file contents, logs)
+			if c.lim.text() {
+				return json.Marshal(compressText(s, c))
+			}
 			return nil, err
 		}
 		b, err := json.Marshal(prune(inner, c))

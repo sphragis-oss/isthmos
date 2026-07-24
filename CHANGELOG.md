@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `%ALL` column and scope note in `isthmos stats`: each tool's saving shown against all measured traffic, not just its own denominator.
 - Reveal tracking: `isthmos reveal` logs a per-tool event and `stats` reports a `REVEALS` column, an over-pruning signal (each reveal is an extra tool call recovering truncated data).
+- Text compression for plain-text payloads: `max_lines` head-and-tail line truncation with error-line pinning and the same reversible markers, and `dedup` collapsing runs of 3+ identical lines into a labelled count. Applies to raw non-JSON payloads and JSON strings carrying text (file contents, logs).
 
 ### Changed
 
