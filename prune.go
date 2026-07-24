@@ -207,6 +207,10 @@ func truthy(v any) bool {
 
 // capStr truncates a long string at a rune boundary, appending an explicit marker
 func capStr(s string, c *pruneCtx) string {
+	// real hook payloads carry text inside JSON strings (stdout, file.content)
+	if c.lim.text() {
+		s = compressText(s, c)
+	}
 	maxStr := c.lim.MaxStr
 	if maxStr <= 0 || len(s) <= maxStr {
 		return s

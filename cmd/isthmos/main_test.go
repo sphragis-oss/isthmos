@@ -29,8 +29,8 @@ func setupEnv(t *testing.T) string {
 func hookStdin(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	in, err := json.Marshal(hookInput{
-		ToolName:   "mcp__github__x",
-		ToolOutput: json.RawMessage(`{"noise":"xxxxxxxxxxxxxxxxxxxxxxxx","keep":"y"}`),
+		ToolName:     "mcp__github__x",
+		ToolResponse: json.RawMessage(`{"noise":"xxxxxxxxxxxxxxxxxxxxxxxx","keep":"y"}`),
 	})
 	if err != nil {
 		t.Fatal(err)

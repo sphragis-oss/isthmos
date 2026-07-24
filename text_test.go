@@ -115,6 +115,23 @@ func TestApplyJSONStringWrappedText(t *testing.T) {
 	}
 }
 
+func TestApplyTextLimitsReachEmbeddedStrings(t *testing.T) {
+	rs := Rules{Rules: []Rule{{Tool: "Bash", MaxLines: 4, KeepLast: 1, Dedup: true}}}
+	stdout := "start\n" + strings.Repeat("same line\n", 60) + "end"
+	in, err := json.Marshal(map[string]any{"stdout": stdout, "stderr": "", "interrupted": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, changed := Apply(rs, "Bash", in)
+	if !changed {
+		t.Fatal("expected change")
+	}
+	s := string(out)
+	if !strings.Contains(s, "repeated 59 more times") || !strings.Contains(s, `"interrupted":false`) {
+		t.Fatalf("embedded string not compressed or structure lost: %s", s)
+	}
+}
+
 func TestApplyNonJSONWithoutTextLimits(t *testing.T) {
 	rs := Rules{Rules: []Rule{{Tool: "*", MaxItems: 2}}}
 	in := []byte("plain text\nno json here\n")
