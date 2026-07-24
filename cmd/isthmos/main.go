@@ -163,6 +163,7 @@ func runReveal(args []string) {
 		slog.Error("reveal", "id", args[0], "err", err)
 		os.Exit(1)
 	}
+	logReveal(st.Tool(args[0]))
 	if _, err := os.Stdout.Write(b); err != nil {
 		slog.Error("write stdout", "err", err)
 		os.Exit(1)

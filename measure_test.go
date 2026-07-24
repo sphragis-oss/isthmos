@@ -48,6 +48,26 @@ func TestAggregateSinceFilter(t *testing.T) {
 	}
 }
 
+func TestAggregateCountsReveals(t *testing.T) {
+	log := `{"ts":"2026-07-19T10:00:00Z","tool":"a","in_bytes":1000,"out_bytes":400}
+{"ts":"2026-07-19T11:00:00Z","tool":"a","reveal":true}
+{"ts":"2026-07-19T12:00:00Z","tool":"b","reveal":true}
+`
+	stats := Aggregate(strings.NewReader(log), time.Time{})
+	byTool := map[string]ToolStat{}
+	for _, s := range stats {
+		byTool[s.Tool] = s
+	}
+	a := byTool["a"]
+	if a.Calls != 1 || a.InBytes != 1000 || a.Reveals != 1 {
+		t.Fatalf("reveal line must not count as a call: %+v", a)
+	}
+	b := byTool["b"]
+	if b.Calls != 0 || b.Reveals != 1 {
+		t.Fatalf("reveal-only tool should still surface: %+v", b)
+	}
+}
+
 func TestEstTokens(t *testing.T) {
 	if EstTokens(4000) != 1000 {
 		t.Fatalf("expected 1000, got %d", EstTokens(4000))

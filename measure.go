@@ -15,6 +15,7 @@ type Measure struct {
 	Tool     string    `json:"tool"`
 	InBytes  int       `json:"in_bytes"`
 	OutBytes int       `json:"out_bytes"`
+	Reveal   bool      `json:"reveal,omitempty"`
 }
 
 type ToolStat struct {
@@ -22,6 +23,7 @@ type ToolStat struct {
 	Calls    int
 	InBytes  int64
 	OutBytes int64
+	Reveals  int
 }
 
 func (s ToolStat) Saved() int64 { return s.InBytes - s.OutBytes }
@@ -46,6 +48,10 @@ func Aggregate(r io.Reader, since time.Time) []ToolStat {
 		if !ok {
 			st = &ToolStat{Tool: m.Tool}
 			byTool[m.Tool] = st
+		}
+		if m.Reveal {
+			st.Reveals++
+			continue
 		}
 		st.Calls++
 		st.InBytes += int64(m.InBytes)

@@ -21,6 +21,18 @@ func measurePath() string {
 
 // logMeasure appends one JSONL line, best effort
 func logMeasure(tool string, in, out int) {
+	appendMeasure(isthmos.Measure{TS: time.Now().UTC(), Tool: tool, InBytes: in, OutBytes: out})
+}
+
+// logReveal records that a truncated payload had to be recovered
+func logReveal(tool string) {
+	if tool == "" {
+		tool = "(unknown)"
+	}
+	appendMeasure(isthmos.Measure{TS: time.Now().UTC(), Tool: tool, Reveal: true})
+}
+
+func appendMeasure(m isthmos.Measure) {
 	p := measurePath()
 	if p == "" {
 		return
@@ -33,5 +45,5 @@ func logMeasure(tool string, in, out int) {
 		return
 	}
 	defer f.Close()
-	_ = json.NewEncoder(f).Encode(isthmos.Measure{TS: time.Now().UTC(), Tool: tool, InBytes: in, OutBytes: out})
+	_ = json.NewEncoder(f).Encode(m)
 }

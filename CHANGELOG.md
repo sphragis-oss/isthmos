@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `%ALL` column and scope note in `isthmos stats`: each tool's saving shown against all measured traffic, not just its own denominator.
+- Reveal tracking: `isthmos reveal` logs a per-tool event and `stats` reports a `REVEALS` column, an over-pruning signal (each reveal is an extra tool call recovering truncated data).
+
+### Changed
+
+- Library: `Store.Save` now takes the tool name for reveal attribution; store entries gain a `.meta` sidecar holding only the tool name, the payload stays encrypted.
+
 ## [0.1.0] - 2026-07-21
 
 ### Added

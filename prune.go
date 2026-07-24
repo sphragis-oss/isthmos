@@ -54,7 +54,7 @@ func ApplyWithStore(rs Rules, tool string, output json.RawMessage, st *Store) (j
 	}
 	if c.truncated && st != nil && c.id != "" {
 		// fail-open: a marker must never point at a payload that was not stored
-		if err := st.Save(c.id, output); err != nil {
+		if err := st.Save(c.id, output, tool); err != nil {
 			return output, false
 		}
 	}
