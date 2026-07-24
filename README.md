@@ -30,10 +30,13 @@ Early but working: rule-based JSON field pruning plus byte-level measurement.
 
 ## Why
 
-Agent context spend is dominated by tool outputs (verbose MCP JSON, log dumps,
-API payloads), yet most token hygiene tooling only targets the input/prefix
-side. isthmos targets the output side, at the only point where the payload is
-visible before the model reads it.
+Verbose tool outputs (fat MCP JSON, log dumps, API payloads) can be a large
+share of an agent's context on some workflows and a rounding error on others.
+Which one your machine has is an empirical question, so isthmos ships
+measurement first: shadow mode and a per-call byte log show what pruning would
+save on your traffic before anything is rewritten. A per-tool saving is a
+local percentage, not a whole-task cost reduction; isthmos claims neither and
+reports both the local number and its share of everything it measured.
 
 ## Usage
 
@@ -125,17 +128,25 @@ emits a replacement when the result is strictly smaller.
 ## Measurement
 
 Every invocation appends one line to `~/.local/state/isthmos/measure.jsonl`
-with before/after byte counts per tool, so pruning rules are driven by real
-data, not guesses. `isthmos stats` turns that log into a savings table:
+with before/after byte counts per tool, including calls the rules left
+untouched, so pruning rules are driven by real data, not guesses.
+`isthmos stats` turns that log into a savings table (illustrative output):
 
 ```
 $ isthmos stats -since 168h
-TOOL                                      CALLS  IN     OUT    SAVED  SAVED%  ~TOKENS
-mcp__atlassian__searchJiraIssuesUsingJql  42     1.9MB  0.6MB  1.3MB  68.4%   340787
-mcp__github__get_me                       7      12.3KB 4.1KB  8.2KB  66.7%   2099
-TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   342886
+TOOL                                      CALLS  IN     OUT    SAVED  SAVED%  %ALL   ~TOKENS
+mcp__atlassian__searchJiraIssuesUsingJql  42     1.9MB  0.6MB  1.3MB  68.4%   68.0%  340787
+mcp__github__get_me                       7      12.3KB 4.1KB  8.2KB  66.7%   0.4%   2099
+TOTAL                                     49     1.9MB  0.6MB  1.3MB  68.4%   68.4%  342886
+scope: only tool calls that reached isthmos; whole-session context is a larger denominator
 ```
 
+`SAVED%` is local to that tool; `%ALL` is the same saving as a share of every
+byte isthmos measured in the window, so a flashy local percentage cannot pose
+as an overall one. Neither is a session-level or dollar figure: tools your
+hook matcher never routes to isthmos are not in the log, and published agent
+traces show repeated context (system prompt, history) is typically the far
+larger consumer.
 `-file` points at a different log, `-since` bounds the window. The `~TOKENS`
 column is a rough 4-bytes-per-token estimate, not a tokenizer.
 

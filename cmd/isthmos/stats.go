@@ -36,22 +36,25 @@ func runStats(args []string) {
 		fmt.Println("no measurements yet")
 		return
 	}
-	w := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "TOOL\tCALLS\tIN\tOUT\tSAVED\tSAVED%\t~TOKENS")
 	var tot isthmos.ToolStat
 	for _, s := range stats {
-		fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\t%s\t%d\n",
-			s.Tool, s.Calls, human(s.InBytes), human(s.OutBytes), human(s.Saved()), pct(s.Saved(), s.InBytes), isthmos.EstTokens(s.Saved()))
 		tot.Calls += s.Calls
 		tot.InBytes += s.InBytes
 		tot.OutBytes += s.OutBytes
 	}
-	fmt.Fprintf(w, "TOTAL\t%d\t%s\t%s\t%s\t%s\t%d\n",
-		tot.Calls, human(tot.InBytes), human(tot.OutBytes), human(tot.Saved()), pct(tot.Saved(), tot.InBytes), isthmos.EstTokens(tot.Saved()))
+	w := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "TOOL\tCALLS\tIN\tOUT\tSAVED\tSAVED%\t%ALL\t~TOKENS")
+	for _, s := range stats {
+		fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\t%s\t%s\t%d\n",
+			s.Tool, s.Calls, human(s.InBytes), human(s.OutBytes), human(s.Saved()), pct(s.Saved(), s.InBytes), pct(s.Saved(), tot.InBytes), isthmos.EstTokens(s.Saved()))
+	}
+	fmt.Fprintf(w, "TOTAL\t%d\t%s\t%s\t%s\t%s\t%s\t%d\n",
+		tot.Calls, human(tot.InBytes), human(tot.OutBytes), human(tot.Saved()), pct(tot.Saved(), tot.InBytes), pct(tot.Saved(), tot.InBytes), isthmos.EstTokens(tot.Saved()))
 	if err := w.Flush(); err != nil {
 		slog.Error("write stats", "err", err)
 		os.Exit(1)
 	}
+	fmt.Println("scope: only tool calls that reached isthmos; whole-session context is a larger denominator")
 }
 
 func human(b int64) string {
