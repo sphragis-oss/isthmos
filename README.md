@@ -81,8 +81,9 @@ shadow:  off
 ```
 
 Exits non-zero when something is actually broken (unreadable or invalid rules,
-unusable store); a missing rules file is just reported, since no rules means
-isthmos is a deliberate no-op.
+unusable store, or a hook that fires but only ever receives empty payloads,
+which means the wiring or input field is wrong); a missing rules file is just
+reported, since no rules means isthmos is a deliberate no-op.
 
 ### As a Go library
 
@@ -138,7 +139,8 @@ emits a replacement when the result is strictly smaller.
 
 Every invocation appends one line to `~/.local/state/isthmos/measure.jsonl`
 with before/after byte counts per tool, including calls the rules left
-untouched, so pruning rules are driven by real data, not guesses.
+untouched, so pruning rules are driven by real data, not guesses. The log is
+capped at 5MB; when it grows past that, the oldest half is trimmed.
 `isthmos stats` turns that log into a savings table (illustrative output):
 
 ```

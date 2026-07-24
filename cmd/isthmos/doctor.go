@@ -55,6 +55,20 @@ func runDoctor(w io.Writer) int {
 		fmt.Fprintf(w, "measure: %s: no data yet\n", measurePath())
 	} else {
 		fmt.Fprintf(w, "measure: %s: %s, last write %s\n", measurePath(), human(fi.Size()), fi.ModTime().Format(time.RFC3339))
+		if f, err := os.Open(measurePath()); err == nil {
+			var calls int
+			var in int64
+			for _, s := range isthmos.Aggregate(f, time.Now().Add(-72*time.Hour)) {
+				calls += s.Calls
+				in += s.InBytes
+			}
+			_ = f.Close()
+			// a firing hook that only ever sees empty payloads is miswired
+			if calls >= 5 && in == 0 {
+				code = 1
+				fmt.Fprintf(w, "payload: FAIL %d recent calls all carried 0 bytes, hook input mismatch\n", calls)
+			}
+		}
 	}
 
 	home, _ := os.UserHomeDir()
