@@ -77,20 +77,40 @@ install landed (`which isthmos`).
 
 ### Claude Code (native hook)
 
+Start in shadow mode. isthmos measures what its rules would save on your own
+traffic and rewrites nothing, so the first week costs you no risk:
+
 ```json
 {
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "mcp__.*",
+        "matcher": "mcp__.*|Read|Bash|WebFetch|Grep",
         "hooks": [
-          {"type": "command", "command": "$HOME/.local/bin/isthmos hook", "timeout": 5}
+          {"type": "command", "command": "ISTHMOS_SHADOW=1 $HOME/.local/bin/isthmos hook", "timeout": 5}
         ]
       }
     ]
   }
 }
 ```
+
+Let it run, then read `isthmos stats`. Whether pruning is worth anything on
+your machine is an empirical question and the answer varies a lot by workload:
+MCP-heavy traffic is where field pruning pays, while a session dominated by
+short `Bash` outputs is close to the worst case.
+
+Only once the numbers justify it, drop `ISTHMOS_SHADOW=1` so isthmos rewrites
+live:
+
+```json
+{"type": "command", "command": "$HOME/.local/bin/isthmos hook", "timeout": 5}
+```
+
+Narrow the matcher to the tools your stats show are actually worth pruning.
+The text limits under [Configuration](#configuration) are truncation, not
+compression, so treat them as the opt-in step: they are the fastest way to
+save bytes and the only way to lose something you wanted.
 
 ### Any other agent (generic filter)
 
@@ -106,18 +126,21 @@ untouched unless a matching rule sets the text limits below.
 
 ```
 $ isthmos doctor
-version: 0.1.0
+version: 0.3.0
 rules:   /Users/you/.config/isthmos/rules.json: ok, 4 rules
 store:   ok, 12 entries
 measure: /Users/you/.local/state/isthmos/measure.jsonl: 84.2KB, last write 2026-07-21T09:14:02Z
 hook:    wired in ~/.claude/settings.json
-shadow:  off
+shadow:  ON, measuring only, nothing is rewritten
+next:    let it run, then read the numbers with: isthmos stats
 ```
 
 Exits non-zero when something is actually broken (unreadable or invalid rules,
 unusable store, or a hook that fires but only ever receives empty payloads,
 which means the wiring or input field is wrong); a missing rules file is just
-reported, since no rules means isthmos is a deliberate no-op.
+reported, since no rules means isthmos is a deliberate no-op. Once shadow mode
+is off, `doctor` also warns when reveals are piling up, the signal that a rule
+is cutting more than the agent can do without.
 
 ### As a Go library
 
@@ -202,15 +225,28 @@ rule instead of celebrating its `SAVED%`.
 
 ### Shadow mode
 
-Set `ISTHMOS_SHADOW=1` to measure without rewriting: isthmos computes what the
-rules would save and logs it, but the hook emits nothing and `filter` passes
-stdin through untouched. Nothing is written to the reversibility store. Use it
-to trial rules on a new machine, then unset it once `isthmos stats` shows the
-savings are worth it:
+`ISTHMOS_SHADOW=1` is the recommended way to start, as
+[above](#claude-code-native-hook). isthmos computes what the rules would save
+and logs it, but the hook emits nothing and `filter` passes stdin through
+untouched. Nothing is written to the reversibility store, and nothing can be
+lost. Unset it once `isthmos stats` shows the savings are worth it.
 
-```json
-{"type": "command", "command": "ISTHMOS_SHADOW=1 $HOME/.local/bin/isthmos hook", "timeout": 5}
+### Sharing your numbers
+
+`isthmos stats -share` replaces third-party tool names with stable placeholders
+(`mcp__server1__*`), so a report can be pasted into a public issue. The
+measurement log never contains file paths, arguments, or payload contents, only
+byte counts, so the redacted table is the whole of what leaves your machine.
+
 ```
+$ isthmos stats -share
+TOOL              CALLS  IN     OUT    SAVED  SAVED%  %ALL   ~TOKENS  REVEALS
+mcp__server1__*   42     1.9MB  0.6MB  1.3MB  68.4%   68.0%  340787   3
+Read              93     0.9MB  0.5MB  0.4MB  41.1%   27.3%  99264    0
+```
+
+Workload is the thing nobody can guess for you, so results from a workload
+unlike the maintainer's are the most useful thing you can contribute.
 
 ## Reversibility
 

@@ -53,6 +53,7 @@ func runDoctor(w io.Writer) int {
 		fmt.Fprintf(w, "store:   ok, %d entries\n", n)
 	}
 
+	var reveals int
 	if fi, err := os.Stat(measurePath()); err != nil {
 		fmt.Fprintf(w, "measure: %s: no data yet\n", measurePath())
 	} else {
@@ -63,6 +64,7 @@ func runDoctor(w io.Writer) int {
 			for _, s := range isthmos.Aggregate(f, time.Now().Add(-72*time.Hour)) {
 				calls += s.Calls
 				in += s.InBytes
+				reveals += s.Reveals
 			}
 			_ = f.Close()
 			// a firing hook that only ever sees empty payloads is miswired
@@ -84,9 +86,14 @@ func runDoctor(w io.Writer) int {
 	}
 
 	if shadowMode() {
-		fmt.Fprintln(w, "shadow:  ON, measuring only, no rewriting")
+		fmt.Fprintln(w, "shadow:  ON, measuring only, nothing is rewritten")
+		fmt.Fprintln(w, "next:    let it run, then read the numbers with: isthmos stats")
 	} else {
-		fmt.Fprintln(w, "shadow:  off")
+		fmt.Fprintln(w, "shadow:  off, tool output is rewritten live")
+		// every reveal is an extra tool call the agent had to make to undo a cut
+		if reveals > 0 {
+			fmt.Fprintf(w, "reveals: WARN %d truncation(s) recovered in the last 72h, pruning is too aggressive somewhere\n", reveals)
+		}
 	}
 	return code
 }
