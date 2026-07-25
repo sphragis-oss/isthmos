@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `isthmos stats -share` replaces third-party tool names with stable placeholders (`mcp__server1__*`), so a savings table can be pasted into a public issue. Built-in tool names are kept, since they carry nothing private.
 - `doctor` warns when reveals are piling up while shadow mode is off, the signal that a rule cuts more than the agent can do without.
+- Cross-call dedup: a payload the agent has already been sent in the same session is replaced by a reference to it instead of being resent. The index is scoped to the hook's `session_id`, so a hit means the content is genuinely still in context and the reference cannot dangle; it holds content hashes only, never payloads. Runs in shadow mode too, where it is measured but not applied, and `ISTHMOS_NO_DEDUP=1` disables it outright.
+- Library: `ApplyWithSeen` takes a `*Seen` session index alongside the store. `Apply` and `ApplyWithStore` are unchanged and never dedup.
 
 ### Changed
 

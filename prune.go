@@ -27,6 +27,8 @@ type pruneCtx struct {
 	drop      map[string]bool
 	lim       Limits
 	id        string
+	tool      string
+	seen      *Seen
 	truncated bool
 }
 
@@ -37,6 +39,20 @@ func (c *pruneCtx) hint() string {
 	return ", full: isthmos reveal " + c.id
 }
 
+// dedupHit replaces text already sent this session with a reference to it
+func (c *pruneCtx) dedupHit(s string) (string, bool) {
+	e, ok := c.seen.Check(s)
+	if !ok {
+		return "", false
+	}
+	c.truncated = true
+	tool := c.tool
+	if tool == "" {
+		tool = "call"
+	}
+	return fmt.Sprintf("[isthmos: identical to an earlier %s in this session, %d lines unchanged%s]", tool, e.Lines, c.hint()), true
+}
+
 // Apply returns the possibly pruned output and whether it shrank
 func Apply(rs Rules, tool string, output json.RawMessage) (json.RawMessage, bool) {
 	return ApplyWithStore(rs, tool, output, nil)
@@ -44,13 +60,18 @@ func Apply(rs Rules, tool string, output json.RawMessage) (json.RawMessage, bool
 
 // ApplyWithStore also spools the original payload so truncation markers are reversible
 func ApplyWithStore(rs Rules, tool string, output json.RawMessage, st *Store) (json.RawMessage, bool) {
+	return ApplyWithSeen(rs, tool, output, st, nil)
+}
+
+// ApplyWithSeen also collapses payloads this session already sent to the agent
+func ApplyWithSeen(rs Rules, tool string, output json.RawMessage, st *Store, seen *Seen) (json.RawMessage, bool) {
 	rs = rs.eligible(len(output))
 	drop := rs.DropFor(tool)
 	lim := rs.LimitsFor(tool)
-	if (len(drop) == 0 && lim.empty()) || len(output) == 0 {
+	if (len(drop) == 0 && lim.empty() && seen == nil) || len(output) == 0 {
 		return output, false
 	}
-	c := &pruneCtx{drop: drop, lim: lim}
+	c := &pruneCtx{drop: drop, lim: lim, tool: tool, seen: seen}
 	if st != nil {
 		c.id = newID()
 	}
@@ -76,6 +97,9 @@ func pruneJSON(raw json.RawMessage, c *pruneCtx) ([]byte, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
 		// not JSON at all: the text path is the only one that can help
+		if m, ok := c.dedupHit(string(raw)); ok {
+			return []byte(m), nil
+		}
 		if c.lim.text() {
 			return []byte(compressText(string(raw), c)), nil
 		}
@@ -85,6 +109,9 @@ func pruneJSON(raw json.RawMessage, c *pruneCtx) ([]byte, error) {
 		var inner any
 		if err := json.Unmarshal([]byte(s), &inner); err != nil {
 			// a JSON string carrying plain text (file contents, logs)
+			if m, ok := c.dedupHit(s); ok {
+				return json.Marshal(m)
+			}
 			if c.lim.text() {
 				return json.Marshal(compressText(s, c))
 			}
@@ -207,6 +234,9 @@ func truthy(v any) bool {
 
 // capStr truncates a long string at a rune boundary, appending an explicit marker
 func capStr(s string, c *pruneCtx) string {
+	if m, ok := c.dedupHit(s); ok {
+		return m
+	}
 	// real hook payloads carry text inside JSON strings (stdout, file.content)
 	if c.lim.text() {
 		s = compressText(s, c)

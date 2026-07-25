@@ -16,6 +16,7 @@ import (
 )
 
 type hookInput struct {
+	SessionID    string          `json:"session_id"`
 	ToolName     string          `json:"tool_name"`
 	ToolResponse json.RawMessage `json:"tool_response"`
 }
@@ -65,6 +66,21 @@ func openStore() *isthmos.Store {
 	return st
 }
 
+// dedupOff is the kill switch for cross-call dedup, which sits in the output path
+func dedupOff() bool {
+	v := os.Getenv("ISTHMOS_NO_DEDUP")
+	return v == "1" || v == "true"
+}
+
+// openSeen scopes dedup to one session; nil disables it
+func openSeen(session string) *isthmos.Seen {
+	d := stateDir()
+	if d == "" || dedupOff() {
+		return nil
+	}
+	return isthmos.OpenSeen(filepath.Join(d, "seen"), session, 7*24*time.Hour)
+}
+
 // version is set by goreleaser via ldflags
 var version = "dev"
 
@@ -109,7 +125,7 @@ func runHook(stdin io.Reader, stdout io.Writer) {
 	if !shadowMode() {
 		st = openStore()
 	}
-	out, changed := isthmos.ApplyWithStore(rs, in.ToolName, in.ToolResponse, st)
+	out, changed := isthmos.ApplyWithSeen(rs, in.ToolName, in.ToolResponse, st, openSeen(in.SessionID))
 	logMeasure(in.ToolName, len(in.ToolResponse), len(out))
 	if !changed || shadowMode() {
 		return
