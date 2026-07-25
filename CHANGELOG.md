@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `isthmos stats -share` replaces third-party tool names with stable placeholders (`mcp__server1__*`), so a savings table can be pasted into a public issue. Built-in tool names are kept, since they carry nothing private.
+- `doctor` warns when reveals are piling up while shadow mode is off, the signal that a rule cuts more than the agent can do without.
+
+### Changed
+
+- Shadow mode is now the documented way to install: the README wires the hook with `ISTHMOS_SHADOW=1` first and promotes live rewriting to a second step, once `isthmos stats` justifies it. Whether pruning pays is workload-dependent, so the front door no longer asks for trust ahead of evidence.
+- `doctor` reports shadow mode as a normal state and points at `isthmos stats`, rather than listing it as a status flag.
+
 ## [0.3.0] - 2026-07-24
 
 ### Added
