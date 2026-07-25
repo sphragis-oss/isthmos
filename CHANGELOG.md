@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Cross-call dedup: a payload the agent has already been sent in the same session is replaced by a reference to it instead of being resent. The index is scoped to the hook's `session_id`, so a hit means the content is genuinely still in context and the reference cannot dangle; it holds content hashes only, never payloads. Runs in shadow mode too, where it is measured but not applied, and `ISTHMOS_NO_DEDUP=1` disables it outright.
+- Library: `ApplyWithSeen` takes a `*Seen` session index alongside the store. `Apply` and `ApplyWithStore` are unchanged and never dedup.
+
 ## [0.3.0] - 2026-07-24
 
 ### Added
