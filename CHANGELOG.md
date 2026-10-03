@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The hook applied shape-changing rules (`drop_keys`, `keep_keys`, `drop_empty`, `tabular`, a `max_items` marker in an array of objects) to built-in tools. Claude Code ignores a built-in rewrite that does not match the tool's output schema, so the rewrite was discarded while the saving was still logged. Built-in tools now get shape-preserving edits only, and `doctor` warns about rules that ask for more. Library: `Rules.KeepShape`, `Limits.KeepShape`.
 - Integers beyond 2^53 were silently rounded by the JSON round trip (`1234567890123456789` became `1234567890123456800`). Numbers are now re-emitted exactly as written.
 - `<`, `>` and `&` were re-encoded as 6-byte `\u00XX` escapes, which could cancel a rule's whole saving on code and HTML payloads.
 - Cross-call dedup was keyed on `session_id` alone, which subagents share and compaction does not change, so a reference could point at content the agent never saw or no longer had. The index is now per subagent and is cleared by a `SessionStart` hook with matcher `compact`.

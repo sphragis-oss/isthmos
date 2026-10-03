@@ -94,6 +94,9 @@ func runDoctor(w io.Writer) int {
 		for _, r := range deadRules(rules, wired.matchers) {
 			fmt.Fprintf(w, "hook:    WARN rule %q not routed by any isthmos hook matcher\n", r)
 		}
+		for _, r := range shapeRules(rules) {
+			fmt.Fprintf(w, "hook:    WARN rule %q: drop_keys, keep_keys, drop_empty and tabular are skipped for built-in tools, Claude Code rejects a changed output shape\n", r)
+		}
 		if !wired.compact && !dedupOff() && !wired.all(noDedupEnv) {
 			fmt.Fprintln(w, "hook:    WARN no SessionStart compact hook, cross-call dedup can point at content compaction removed")
 		}
@@ -201,6 +204,23 @@ func badGlob(rs isthmos.Rules) string {
 		}
 	}
 	return ""
+}
+
+// shapeRules lists rules that ask a built-in tool for an edit the hook must skip
+func shapeRules(rs isthmos.Rules) []string {
+	var out []string
+	for _, r := range rs.Rules {
+		if len(r.DropKeys) == 0 && len(r.KeepKeys) == 0 && !r.DropEmpty && !r.Tabular {
+			continue
+		}
+		for b := range builtins {
+			if ok, _ := path.Match(r.Tool, b); ok {
+				out = append(out, r.Tool)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // deadRules lists rule globs no isthmos hook matcher routes to

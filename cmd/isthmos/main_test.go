@@ -342,3 +342,39 @@ func readState(t *testing.T, name string) string {
 	}
 	return string(b)
 }
+
+func TestHookKeepsBuiltinShape(t *testing.T) {
+	home := setupEnv(t)
+	if err := os.WriteFile(filepath.Join(home, "rules.json"), []byte(`{"rules":[{"tool":"*","drop_keys":["noise"]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	in, err := json.Marshal(hookInput{ToolName: "Bash", ToolResponse: json.RawMessage(`{"stdout":"ok","noise":"xxxxxxxxxxxxxxxxxxxxxxxx"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	runHook(bytes.NewBuffer(in), &out)
+	if out.Len() != 0 {
+		t.Fatalf("a built-in tool must keep its keys: %s", out.String())
+	}
+	stats := isthmos.Aggregate(strings.NewReader(readState(t, "measure.jsonl")), zeroTime)
+	if len(stats) != 1 || stats[0].Saved() != 0 {
+		t.Fatalf("a rewrite Claude Code would discard must not be logged as a saving: %+v", stats)
+	}
+}
+
+func TestDoctorWarnsOnShapeRuleForBuiltin(t *testing.T) {
+	home := setupEnv(t)
+	if err := os.WriteFile(filepath.Join(home, "rules.json"), []byte(`{"rules":[{"tool":"Bash","drop_empty":true},{"tool":"mcp__*","drop_keys":["noise"]},{"tool":"Read","max_lines":100}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeSettings(t, home, `{"hooks":{"PostToolUse":[{"matcher":"mcp__.*|Bash|Read","hooks":[{"type":"command","command":"isthmos hook"}]}]}}`)
+	var out bytes.Buffer
+	runDoctor(&out)
+	if !strings.Contains(out.String(), `WARN rule "Bash": drop_keys`) {
+		t.Fatalf("shape rule on a built-in not flagged: %s", out.String())
+	}
+	if strings.Contains(out.String(), `WARN rule "mcp__*"`) || strings.Contains(out.String(), `WARN rule "Read"`) {
+		t.Fatalf("a safe rule was flagged: %s", out.String())
+	}
+}

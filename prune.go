@@ -22,6 +22,7 @@ type Limits struct {
 	Dedup     bool
 	DropEmpty bool
 	Tabular   bool
+	KeepShape bool
 }
 
 func (l Limits) empty() bool {
@@ -307,6 +308,10 @@ func tabulate(t []any) (any, bool) {
 func capItems(t []any, c *pruneCtx) []any {
 	lim := c.lim
 	if lim.MaxItems <= 0 || len(t) <= lim.MaxItems {
+		return t
+	}
+	// the marker is a string, so it only fits an array that already holds strings
+	if lim.KeepShape && slices.ContainsFunc(t, func(v any) bool { _, ok := v.(string); return !ok }) {
 		return t
 	}
 	keepLast := lim.KeepLast

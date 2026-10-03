@@ -220,6 +220,14 @@ of 3 or more same-shaped objects as `{"isthmos_table": {"cols": [...], "rows":
 whose key sets differ are left as they are, which is what `drop_empty` tends
 to produce, so pick one of the two per tool.
 
+In the Claude Code hook, `drop_keys`, `keep_keys`, `drop_empty` and `tabular`
+apply to MCP tools only. Claude Code checks a built-in tool's replacement
+against that tool's output schema and silently keeps the original when the
+shape differs, so for `Bash`, `Read` and the other built-ins isthmos restricts
+itself to edits that keep the shape: the text limits, `max_str`, cross-call
+dedup, and `max_items` on arrays of strings. `doctor` warns about a rule that
+asks for more. `filter` and `mcp` mode apply every rule as written.
+
 Besides `drop_keys`, a rule can cap payload size generically: `max_items`
 truncates any array beyond N elements and `max_str` truncates any string beyond
 N bytes (at a rune boundary). Both replace the removed tail with an explicit
