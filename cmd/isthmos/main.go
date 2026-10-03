@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sphragis-oss/isthmos"
@@ -137,6 +138,10 @@ func runHook(stdin io.Reader, stdout io.Writer) {
 		return
 	}
 	rs := isthmos.LoadRules(configPath())
+	// Claude Code discards a built-in tool rewrite whose shape changed
+	if !strings.HasPrefix(in.ToolName, "mcp__") {
+		rs = rs.KeepShape()
+	}
 	var st *isthmos.Store
 	if !shadowMode() {
 		st = openStore()

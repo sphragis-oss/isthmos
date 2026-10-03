@@ -24,7 +24,18 @@ type Rule struct {
 }
 
 type Rules struct {
-	Rules []Rule `json:"rules"`
+	Rules     []Rule `json:"rules"`
+	keepShape bool
+}
+
+// KeepShape returns the rules without any edit that changes a payload's structure
+func (rs Rules) KeepShape() Rules {
+	out := Rules{keepShape: true}
+	for _, r := range rs.Rules {
+		r.DropKeys, r.KeepKeys, r.DropEmpty, r.Tabular = nil, nil, false, false
+		out.Rules = append(out.Rules, r)
+	}
+	return out
 }
 
 // LoadRules is fail-open: missing or bad config means no rules
@@ -68,7 +79,7 @@ func (rs Rules) KeepFor(tool string) map[string]bool {
 
 // LimitsFor takes the strictest positive limit across matching rules
 func (rs Rules) LimitsFor(tool string) Limits {
-	var lim Limits
+	lim := Limits{KeepShape: rs.keepShape}
 	for _, r := range rs.Rules {
 		if ok, _ := path.Match(r.Tool, tool); !ok {
 			continue
@@ -100,7 +111,7 @@ func (rs Rules) LimitsFor(tool string) Limits {
 
 // eligible keeps only rules whose min_bytes gate the payload passes
 func (rs Rules) eligible(size int) Rules {
-	var out Rules
+	out := Rules{keepShape: rs.keepShape}
 	for _, r := range rs.Rules {
 		if r.MinBytes == 0 || size >= r.MinBytes {
 			out.Rules = append(out.Rules, r)
