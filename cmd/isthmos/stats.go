@@ -21,8 +21,13 @@ func runStats(args []string) {
 	file := fs.String("file", measurePath(), "measurement log to read")
 	sinceFlag := fs.Duration("since", 0, "only include entries newer than this age, e.g. 168h")
 	share := fs.Bool("share", false, "replace third-party tool names with placeholders, for pasting in public")
+	keys := fs.String("keys", "", "show the heaviest keys for tools matching this glob, from shadow-mode profiling")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
+	}
+	if *keys != "" {
+		runKeyStats(*keys, *sinceFlag)
+		return
 	}
 	f, err := os.Open(*file)
 	if err != nil {
@@ -65,6 +70,38 @@ func runStats(args []string) {
 	if *share {
 		fmt.Println("share: third-party tool names replaced with placeholders; no paths or payloads are ever logged")
 	}
+}
+
+// runKeyStats shows which keys a drop_keys or keep_keys rule should name
+func runKeyStats(glob string, age time.Duration) {
+	f, err := os.Open(keysPath())
+	if err != nil {
+		fmt.Println("no key profile yet: it is recorded in shadow mode (ISTHMOS_SHADOW=1)")
+		return
+	}
+	defer f.Close()
+	var since time.Time
+	if age > 0 {
+		since = time.Now().Add(-age)
+	}
+	stats, total := isthmos.AggregateKeys(f, since, glob)
+	if len(stats) == 0 {
+		fmt.Printf("no key profile for tools matching %q\n", glob)
+		return
+	}
+	if len(stats) > 30 {
+		stats = stats[:30]
+	}
+	w := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "KEY\tCALLS\tBYTES\tSHARE")
+	for _, s := range stats {
+		fmt.Fprintf(w, "%s\t%d\t%s\t%s\n", s.Key, s.Calls, human(s.Bytes), pct(s.Bytes, total))
+	}
+	if err := w.Flush(); err != nil {
+		slog.Error("write stats", "err", err)
+		os.Exit(1)
+	}
+	fmt.Println("scope: a key's bytes include everything nested under it, so rows overlap and do not sum to 100%")
 }
 
 // builtins are the agent's own tool names, which carry nothing private

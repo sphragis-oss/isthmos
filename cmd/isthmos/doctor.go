@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -31,9 +32,15 @@ func runDoctor(w io.Writer) int {
 		code = 1
 		fmt.Fprintf(w, "rules:   %s: FAIL %v\n", p, err)
 	default:
-		if err := json.Unmarshal(b, &rules); err != nil {
+		// strict here only: a typo'd field is a rule that silently does nothing
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&rules); err != nil {
 			code = 1
-			fmt.Fprintf(w, "rules:   %s: FAIL invalid JSON: %v\n", p, err)
+			fmt.Fprintf(w, "rules:   %s: FAIL invalid rules: %v\n", p, err)
+		} else if bad := badGlob(rules); bad != "" {
+			code = 1
+			fmt.Fprintf(w, "rules:   %s: FAIL tool glob %q is malformed and never matches\n", p, bad)
 		} else {
 			fmt.Fprintf(w, "rules:   %s: ok, %d rules\n", p, len(rules.Rules))
 		}
@@ -75,17 +82,25 @@ func runDoctor(w io.Writer) int {
 		}
 	}
 
-	home, _ := os.UserHomeDir()
-	if b, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil && bytes.Contains(b, []byte("isthmos")) {
-		fmt.Fprintln(w, "hook:    wired in ~/.claude/settings.json")
-		for _, r := range deadRules(rules, b) {
+	var wired wiring
+	for _, p := range settingsFiles() {
+		if b, err := os.ReadFile(p); err == nil && wired.scan(b) {
+			fmt.Fprintf(w, "hook:    wired in %s\n", p)
+		}
+	}
+	if len(wired.cmds) == 0 {
+		fmt.Fprintln(w, "hook:    not in any Claude Code settings file (fine if you use filter or mcp mode)")
+	} else {
+		for _, r := range deadRules(rules, wired.matchers) {
 			fmt.Fprintf(w, "hook:    WARN rule %q not routed by any isthmos hook matcher\n", r)
 		}
-	} else {
-		fmt.Fprintln(w, "hook:    not in ~/.claude/settings.json (fine if you use filter mode)")
+		if !wired.compact && !dedupOff() && !wired.all(noDedupEnv) {
+			fmt.Fprintln(w, "hook:    WARN no SessionStart compact hook, cross-call dedup can point at content compaction removed")
+		}
 	}
 
-	if shadowMode() {
+	// the hook runs with the env its command sets, not with this shell's
+	if shadowMode() || wired.all(shadowEnv) {
 		fmt.Fprintln(w, "shadow:  ON, measuring only, nothing is rewritten")
 		fmt.Fprintln(w, "next:    let it run, then read the numbers with: isthmos stats")
 	} else {
@@ -99,33 +114,97 @@ func runDoctor(w io.Writer) int {
 }
 
 type hookSettings struct {
-	Hooks struct {
-		PostToolUse []struct {
-			Matcher string `json:"matcher"`
-			Hooks   []struct {
-				Command string `json:"command"`
-			} `json:"hooks"`
-		} `json:"PostToolUse"`
+	Hooks map[string][]struct {
+		Matcher string `json:"matcher"`
+		Hooks   []struct {
+			Command string `json:"command"`
+		} `json:"hooks"`
 	} `json:"hooks"`
 }
 
-// deadRules lists rule globs no isthmos hook matcher routes to
-func deadRules(rs isthmos.Rules, settings []byte) []string {
+var (
+	shadowEnv  = regexp.MustCompile(`\bISTHMOS_SHADOW=(1|true)\b`)
+	noDedupEnv = regexp.MustCompile(`\bISTHMOS_NO_DEDUP=(1|true)\b`)
+)
+
+// wiring is what the settings files say about how the hook is invoked
+type wiring struct {
+	matchers []*regexp.Regexp
+	cmds     []string
+	compact  bool
+}
+
+// settingsFiles lists the user and project settings a hook can live in
+func settingsFiles() []string {
+	home, _ := os.UserHomeDir()
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range []string{
+		filepath.Join(home, ".claude", "settings.json"),
+		filepath.Join(".claude", "settings.json"),
+		filepath.Join(".claude", "settings.local.json"),
+	} {
+		if abs, err := filepath.Abs(p); err == nil && !seen[abs] {
+			seen[abs] = true
+			out = append(out, abs)
+		}
+	}
+	return out
+}
+
+// scan collects isthmos hooks from one settings file, reporting whether it had any
+func (w *wiring) scan(settings []byte) bool {
 	var s hookSettings
 	if json.Unmarshal(settings, &s) != nil {
-		return nil
+		return false
 	}
-	var matchers []*regexp.Regexp
-	for _, e := range s.Hooks.PostToolUse {
-		for _, h := range e.Hooks {
-			if strings.Contains(h.Command, "isthmos") {
-				if re, err := regexp.Compile("^(?:" + e.Matcher + ")$"); err == nil {
-					matchers = append(matchers, re)
+	found := false
+	for event, entries := range s.Hooks {
+		for _, e := range entries {
+			for _, h := range e.Hooks {
+				if !strings.Contains(h.Command, "isthmos") {
+					continue
+				}
+				switch event {
+				case "PostToolUse":
+					found = true
+					w.cmds = append(w.cmds, h.Command)
+					if re, err := regexp.Compile("^(?:" + e.Matcher + ")$"); err == nil {
+						w.matchers = append(w.matchers, re)
+					}
+				case "SessionStart":
+					found = true
+					w.compact = true
 				}
 				break
 			}
 		}
 	}
+	return found
+}
+
+// all reports whether every isthmos tool hook sets the given env assignment
+func (w *wiring) all(env *regexp.Regexp) bool {
+	for _, c := range w.cmds {
+		if !env.MatchString(c) {
+			return false
+		}
+	}
+	return len(w.cmds) > 0
+}
+
+// badGlob returns the first tool pattern path.Match rejects
+func badGlob(rs isthmos.Rules) string {
+	for _, r := range rs.Rules {
+		if _, err := path.Match(r.Tool, ""); err != nil {
+			return r.Tool
+		}
+	}
+	return ""
+}
+
+// deadRules lists rule globs no isthmos hook matcher routes to
+func deadRules(rs isthmos.Rules, matchers []*regexp.Regexp) []string {
 	if len(matchers) == 0 {
 		return nil
 	}

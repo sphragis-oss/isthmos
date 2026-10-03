@@ -36,6 +36,13 @@ unknown=$("$bin" reveal 0123456789abcdef 2>&1) && fail "unknown reveal id must e
 out=$(echo "$small" | ISTHMOS_SHADOW=1 "$bin" filter -tool mcp__github__x)
 [[ "$out" == "$small" ]] || fail "shadow filter rewrote the payload"
 
+req='{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"x"}}'
+resp='{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"{\"noise\":\"xxxxxxxxxxxxxxxxxxxxxxxx\",\"keep\":\"y\"}"}]}}'
+# a one-shot fake server: read the request, answer with the canned result
+out=$(echo "$req" | "$bin" mcp -server github -- sh -c 'read -r _; printf "%s\n" "$1"' sh "$resp")
+[[ "$out" == *keep* ]] || fail "mcp wrapper lost the tool result: $out"
+[[ "$out" != *noise* ]] || fail "mcp wrapper kept a dropped key"
+
 [[ "$("$bin" stats)" == *mcp__github__x* ]] || fail "stats missing the measured tool"
 "$bin" doctor >/dev/null || fail "doctor reported failure"
 [[ -n "$("$bin" version)" ]] || fail "version printed nothing"

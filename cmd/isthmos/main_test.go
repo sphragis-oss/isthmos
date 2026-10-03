@@ -211,3 +211,134 @@ func TestFilterRewrites(t *testing.T) {
 		t.Fatalf("dropped key survived: %s", out.String())
 	}
 }
+
+func dedupHook(t *testing.T, session, agent string) string {
+	t.Helper()
+	body, err := json.Marshal(strings.Repeat("some line of file content here\n", 300))
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := json.Marshal(hookInput{SessionID: session, AgentID: agent, ToolName: "Read", ToolResponse: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	runHook(bytes.NewBuffer(in), &out)
+	return out.String()
+}
+
+func TestHookDedupIsScopedPerAgent(t *testing.T) {
+	setupEnv(t)
+	if out := dedupHook(t, "s1", "subagent-1"); out != "" {
+		t.Fatalf("first sight must pass through: %s", out)
+	}
+	if out := dedupHook(t, "s1", ""); out != "" {
+		t.Fatalf("the parent never saw the subagent's payload: %s", out)
+	}
+	if out := dedupHook(t, "s1", ""); !strings.Contains(out, "identical to an earlier") {
+		t.Fatalf("a repeat in the same context must collapse: %s", out)
+	}
+}
+
+func TestHookCompactionResetsDedup(t *testing.T) {
+	home := setupEnv(t)
+	dedupHook(t, "s1", "")
+	runHook(strings.NewReader(`{"session_id":"s1","hook_event_name":"SessionStart","source":"compact"}`), &bytes.Buffer{})
+	if out := dedupHook(t, "s1", ""); out != "" {
+		t.Fatalf("after compaction the payload is gone from context: %s", out)
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".local", "state", "isthmos", "measure.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := bytes.Count(b, []byte("\n")); n != 2 {
+		t.Fatalf("SessionStart must not be measured as a tool call, got %d lines", n)
+	}
+}
+
+func writeSettings(t *testing.T, home, settings string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDoctorReadsShadowFromHookCommand(t *testing.T) {
+	home := setupEnv(t)
+	writeSettings(t, home, `{"hooks":{"PostToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"ISTHMOS_SHADOW=1 isthmos hook"}]}]}}`)
+	var out bytes.Buffer
+	runDoctor(&out)
+	if !strings.Contains(out.String(), "shadow:  ON") {
+		t.Fatalf("doctor ignored the hook's own env: %s", out.String())
+	}
+}
+
+func TestDoctorWarnsWithoutCompactHook(t *testing.T) {
+	home := setupEnv(t)
+	tool := `"PostToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"isthmos hook"}]}]`
+	writeSettings(t, home, `{"hooks":{`+tool+`}}`)
+	var out bytes.Buffer
+	runDoctor(&out)
+	if !strings.Contains(out.String(), "WARN no SessionStart compact hook") {
+		t.Fatalf("missing compact hook not flagged: %s", out.String())
+	}
+	writeSettings(t, home, `{"hooks":{`+tool+`,"SessionStart":[{"matcher":"compact","hooks":[{"type":"command","command":"isthmos hook"}]}]}}`)
+	out.Reset()
+	runDoctor(&out)
+	if strings.Contains(out.String(), "WARN no SessionStart") {
+		t.Fatalf("wired compact hook still flagged: %s", out.String())
+	}
+}
+
+func TestDoctorFailsOnUnknownRuleField(t *testing.T) {
+	home := setupEnv(t)
+	if err := os.WriteFile(filepath.Join(home, "rules.json"), []byte(`{"rules":[{"tool":"t","drop_key":["x"]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if code := runDoctor(&out); code != 1 || !strings.Contains(out.String(), "drop_key") {
+		t.Fatalf("typo'd field must fail doctor: %s", out.String())
+	}
+}
+
+func TestDoctorFailsOnMalformedGlob(t *testing.T) {
+	home := setupEnv(t)
+	if err := os.WriteFile(filepath.Join(home, "rules.json"), []byte(`{"rules":[{"tool":"mcp__[","drop_keys":["x"]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if code := runDoctor(&out); code != 1 || !strings.Contains(out.String(), "malformed") {
+		t.Fatalf("malformed glob must fail doctor: %s", out.String())
+	}
+}
+
+func TestShadowLogsKeyProfile(t *testing.T) {
+	home := setupEnv(t)
+	t.Setenv("ISTHMOS_SHADOW", "1")
+	runHook(hookStdin(t), &bytes.Buffer{})
+	b, err := os.ReadFile(filepath.Join(home, ".local", "state", "isthmos", "keys.jsonl"))
+	if err != nil {
+		t.Fatalf("shadow mode must profile keys: %v", err)
+	}
+	if !strings.Contains(string(b), `"noise"`) || strings.Contains(string(b), "xxxx") {
+		t.Fatalf("profile must hold key names and no values: %s", b)
+	}
+}
+
+var zeroTime time.Time
+
+func readState(t *testing.T, name string) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".local", "state", "isthmos", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

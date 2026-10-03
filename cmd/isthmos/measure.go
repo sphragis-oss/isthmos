@@ -24,9 +24,27 @@ func measurePath() string {
 	return filepath.Join(d, "measure.jsonl")
 }
 
+func keysPath() string {
+	d := stateDir()
+	if d == "" {
+		return ""
+	}
+	return filepath.Join(d, "keys.jsonl")
+}
+
 // logMeasure appends one JSONL line, best effort
 func logMeasure(tool string, in, out int) {
-	appendMeasure(isthmos.Measure{TS: time.Now().UTC(), Tool: tool, InBytes: in, OutBytes: out})
+	appendLine(measurePath(), isthmos.Measure{TS: time.Now().UTC(), Tool: tool, InBytes: in, OutBytes: out})
+}
+
+// logKeys profiles which keys carry the bytes, in shadow mode only
+func logKeys(tool string, raw json.RawMessage) {
+	if !shadowMode() {
+		return
+	}
+	if kb := isthmos.KeyBytes(raw); len(kb) > 0 {
+		appendLine(keysPath(), isthmos.KeyMeasure{TS: time.Now().UTC(), Tool: tool, InBytes: len(raw), Keys: isthmos.TopKeys(kb, 20)})
+	}
 }
 
 // logReveal records that a truncated payload had to be recovered
@@ -34,11 +52,10 @@ func logReveal(tool string) {
 	if tool == "" {
 		tool = "(unknown)"
 	}
-	appendMeasure(isthmos.Measure{TS: time.Now().UTC(), Tool: tool, Reveal: true})
+	appendLine(measurePath(), isthmos.Measure{TS: time.Now().UTC(), Tool: tool, Reveal: true})
 }
 
-func appendMeasure(m isthmos.Measure) {
-	p := measurePath()
+func appendLine(p string, m any) {
 	if p == "" {
 		return
 	}

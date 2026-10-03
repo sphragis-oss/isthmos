@@ -190,3 +190,15 @@ func TestDedupAloneStoresNothing(t *testing.T) {
 		t.Fatalf("dedup-only output should have no reveal hint: %s", out)
 	}
 }
+
+func TestCapLinesBudgetsErrorPins(t *testing.T) {
+	var lines []string
+	for i := 0; i < 200; i++ {
+		lines = append(lines, fmt.Sprintf("line %d: error something", i))
+	}
+	c := textCtx(Limits{MaxLines: 5, KeepLast: 1})
+	got := strings.Split(compressText(strings.Join(lines, "\n"), c), "\n")
+	if len(got) != 11 {
+		t.Fatalf("got %d lines, want 5 kept, 5 pinned and a marker", len(got))
+	}
+}

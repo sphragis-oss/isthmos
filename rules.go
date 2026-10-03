@@ -10,14 +10,17 @@ import (
 )
 
 type Rule struct {
-	Tool     string   `json:"tool"`
-	DropKeys []string `json:"drop_keys"`
-	MaxItems int      `json:"max_items,omitempty"`
-	MaxStr   int      `json:"max_str,omitempty"`
-	MaxLines int      `json:"max_lines,omitempty"`
-	KeepLast int      `json:"keep_last,omitempty"`
-	MinBytes int      `json:"min_bytes,omitempty"`
-	Dedup    bool     `json:"dedup,omitempty"`
+	Tool      string   `json:"tool"`
+	DropKeys  []string `json:"drop_keys"`
+	KeepKeys  []string `json:"keep_keys,omitempty"`
+	MaxItems  int      `json:"max_items,omitempty"`
+	MaxStr    int      `json:"max_str,omitempty"`
+	MaxLines  int      `json:"max_lines,omitempty"`
+	KeepLast  int      `json:"keep_last,omitempty"`
+	MinBytes  int      `json:"min_bytes,omitempty"`
+	Dedup     bool     `json:"dedup,omitempty"`
+	DropEmpty bool     `json:"drop_empty,omitempty"`
+	Tabular   bool     `json:"tabular,omitempty"`
 }
 
 type Rules struct {
@@ -50,6 +53,19 @@ func (rs Rules) DropFor(tool string) map[string]bool {
 	return drop
 }
 
+// KeepFor merges allowlisted keys from every rule whose glob matches the tool name
+func (rs Rules) KeepFor(tool string) map[string]bool {
+	keep := map[string]bool{}
+	for _, r := range rs.Rules {
+		if ok, _ := path.Match(r.Tool, tool); ok {
+			for _, k := range r.KeepKeys {
+				keep[k] = true
+			}
+		}
+	}
+	return keep
+}
+
 // LimitsFor takes the strictest positive limit across matching rules
 func (rs Rules) LimitsFor(tool string) Limits {
 	var lim Limits
@@ -71,6 +87,12 @@ func (rs Rules) LimitsFor(tool string) Limits {
 		}
 		if r.Dedup {
 			lim.Dedup = true
+		}
+		if r.DropEmpty {
+			lim.DropEmpty = true
+		}
+		if r.Tabular {
+			lim.Tabular = true
 		}
 	}
 	return lim
