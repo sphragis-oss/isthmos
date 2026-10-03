@@ -156,11 +156,11 @@ untouched unless a matching rule sets the text limits below.
 
 ```
 $ isthmos doctor
-version: 0.3.0
+version: 0.5.0
 rules:   /Users/you/.config/isthmos/rules.json: ok, 4 rules
 store:   ok, 12 entries
 measure: /Users/you/.local/state/isthmos/measure.jsonl: 84.2KB, last write 2026-07-21T09:14:02Z
-hook:    wired in ~/.claude/settings.json
+hook:    wired in /Users/you/.claude/settings.json
 shadow:  ON, measuring only, nothing is rewritten
 next:    let it run, then read the numbers with: isthmos stats
 ```
