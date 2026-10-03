@@ -85,6 +85,7 @@ func (s *Store) Save(id string, payload []byte, tool string) error {
 		return err
 	}
 	sealed := g.Seal(nonce, nonce, payload, []byte(id))
+	//nolint:gosec // id passed validID above, so it cannot traverse
 	if err := os.WriteFile(filepath.Join(s.dir, id+".bin"), sealed, 0o600); err != nil {
 		return err
 	}

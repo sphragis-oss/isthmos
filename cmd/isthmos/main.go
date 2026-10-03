@@ -17,6 +17,9 @@ import (
 
 type hookInput struct {
 	SessionID    string          `json:"session_id"`
+	AgentID      string          `json:"agent_id"`
+	Event        string          `json:"hook_event_name"`
+	Source       string          `json:"source"`
 	ToolName     string          `json:"tool_name"`
 	ToolResponse json.RawMessage `json:"tool_response"`
 }
@@ -72,11 +75,15 @@ func dedupOff() bool {
 	return v == "1" || v == "true"
 }
 
-// openSeen scopes dedup to one session; nil disables it
-func openSeen(session string) *isthmos.Seen {
+// openSeen scopes dedup to one context window; nil disables it
+func openSeen(session, agent string) *isthmos.Seen {
 	d := stateDir()
-	if d == "" || dedupOff() {
+	if d == "" || session == "" || dedupOff() {
 		return nil
+	}
+	// subagents share the session id but not the parent's context
+	if agent != "" {
+		session += "/" + agent
 	}
 	return isthmos.OpenSeen(filepath.Join(d, "seen"), session, 7*24*time.Hour)
 }
@@ -98,12 +105,14 @@ func main() {
 		runStats(args)
 	case "reveal":
 		runReveal(args)
+	case "mcp":
+		os.Exit(runMCP(args))
 	case "doctor":
 		os.Exit(runDoctor(os.Stdout))
 	case "version":
 		fmt.Println(version)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|stats|reveal <id>|doctor|version]")
+		fmt.Fprintln(os.Stderr, "usage: isthmos [hook|filter -tool NAME|mcp -server NAME -- CMD|stats|reveal <id>|doctor|version]")
 		os.Exit(2)
 	}
 }
@@ -120,12 +129,20 @@ func runHook(stdin io.Reader, stdout io.Writer) {
 		slog.Error("parse hook input", "err", err)
 		return
 	}
+	if in.Event == "SessionStart" {
+		// compaction drops earlier payloads, so references to them would dangle
+		if in.Source == "compact" {
+			openSeen(in.SessionID, "").Reset()
+		}
+		return
+	}
 	rs := isthmos.LoadRules(configPath())
 	var st *isthmos.Store
 	if !shadowMode() {
 		st = openStore()
 	}
-	out, changed := isthmos.ApplyWithSeen(rs, in.ToolName, in.ToolResponse, st, openSeen(in.SessionID))
+	logKeys(in.ToolName, in.ToolResponse)
+	out, changed := isthmos.ApplyWithSeen(rs, in.ToolName, in.ToolResponse, st, openSeen(in.SessionID, in.AgentID))
 	logMeasure(in.ToolName, len(in.ToolResponse), len(out))
 	if !changed || shadowMode() {
 		return
@@ -153,6 +170,7 @@ func runFilter(args []string, stdin io.Reader, stdout io.Writer) {
 	if !shadowMode() {
 		st = openStore()
 	}
+	logKeys(*tool, raw)
 	out, _ := isthmos.ApplyWithStore(rs, *tool, raw, st)
 	logMeasure(*tool, len(raw), len(out))
 	if shadowMode() {

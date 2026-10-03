@@ -196,3 +196,102 @@ func TestLimitsForMergesKeepLast(t *testing.T) {
 		t.Fatalf("expected KeepLast 5, got %+v", lim)
 	}
 }
+
+func TestLargeIntegersSurviveRoundTrip(t *testing.T) {
+	in := json.RawMessage(`{"id":1234567890123456789,"ratio":1.0,"noise":"xxxxxxxxxxxxxxxx"}`)
+	out, err := PruneJSON(in, map[string]bool{"noise": true}, Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"id":1234567890123456789,"ratio":1.0}` {
+		t.Fatalf("numbers were rewritten: %s", out)
+	}
+}
+
+func TestHTMLCharsAreNotEscaped(t *testing.T) {
+	rs := Rules{Rules: []Rule{{Tool: "t", DropKeys: []string{"noise"}}}}
+	in := json.RawMessage(`{"noise":"xxxxxxxx","html":"<<<<<<>>>>>>&&"}`)
+	out, changed := Apply(rs, "t", in)
+	if !changed || string(out) != `{"html":"<<<<<<>>>>>>&&"}` {
+		t.Fatalf("escaping ate the saving: %s", out)
+	}
+}
+
+func TestErrorPinsAreBudgeted(t *testing.T) {
+	items := make([]string, 200)
+	for i := range items {
+		items[i] = `{"status":"failed"}`
+	}
+	in := json.RawMessage("[" + strings.Join(items, ",") + "]")
+	out, err := PruneJSON(in, nil, Limits{MaxItems: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(out), "failed"); n != 10 {
+		t.Fatalf("kept %d error items, want 5 plus 5 pinned", n)
+	}
+}
+
+func TestDottedDropKeyIsPathScoped(t *testing.T) {
+	in := json.RawMessage(`{"url":"keep","user":{"url":"drop","login":"a"},"items":[{"user":{"url":"drop"}}]}`)
+	out, err := PruneJSON(in, map[string]bool{"user.url": true}, Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"items":[{"user":{}}],"url":"keep","user":{"login":"a"}}` {
+		t.Fatalf("got %s", out)
+	}
+}
+
+func TestKeepKeysIsAnAllowlist(t *testing.T) {
+	rs := Rules{Rules: []Rule{{Tool: "t", KeepKeys: []string{"key", "fields"}}}}
+	in := json.RawMessage(`{"total":2,"issues":[{"key":"A-1","id":"1","meta":{"x":1},"fields":{"summary":"s","n":3}},{"key":"A-2","id":"2","tags":["a"]}]}`)
+	out, changed := Apply(rs, "t", in)
+	if !changed || string(out) != `{"issues":[{"fields":{"n":3,"summary":"s"},"key":"A-1"},{"key":"A-2"}]}` {
+		t.Fatalf("got %s", out)
+	}
+}
+
+func TestDropEmptyRemovesBlankValues(t *testing.T) {
+	in := json.RawMessage(`{"a":null,"b":"","c":[],"d":{},"e":0,"f":false,"g":{"h":null}}`)
+	out, err := PruneJSON(in, nil, Limits{DropEmpty: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"e":0,"f":false}` {
+		t.Fatalf("got %s", out)
+	}
+}
+
+func TestTabularCollapsesSameShapedObjects(t *testing.T) {
+	in := json.RawMessage(`[{"id":1,"name":"a"},{"id":2,"name":"b"},{"id":3,"name":"c"}]`)
+	out, err := PruneJSON(in, nil, Limits{Tabular: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"isthmos_table":{"cols":["id","name"],"rows":[[1,"a"],[2,"b"],[3,"c"]]}}` {
+		t.Fatalf("got %s", out)
+	}
+}
+
+func TestTabularLeavesMixedShapesAlone(t *testing.T) {
+	in := json.RawMessage(`[{"id":1,"name":"a"},{"id":2},{"id":3,"name":"c"}]`)
+	out, err := PruneJSON(in, nil, Limits{Tabular: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "isthmos_table") {
+		t.Fatalf("mixed shapes must stay an array: %s", out)
+	}
+}
+
+func TestTabularKeepsTruncationMarker(t *testing.T) {
+	in := json.RawMessage(`[{"id":1,"n":"a"},{"id":2,"n":"b"},{"id":3,"n":"c"},{"id":4,"n":"d"},{"id":5,"n":"e"}]`)
+	out, err := PruneJSON(in, nil, Limits{Tabular: true, MaxItems: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"note":"[isthmos: 2 of 5 items truncated]"`) || !strings.Contains(string(out), `"rows":[[1,"a"],[2,"b"],[3,"c"]]`) {
+		t.Fatalf("got %s", out)
+	}
+}

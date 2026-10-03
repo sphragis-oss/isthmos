@@ -67,9 +67,12 @@ func capLines(t []string, c *pruneCtx) []string {
 		keep[i] = true
 	}
 	dropped := 0
+	// pins get their own budget, or a log of nothing but errors would never shrink
+	pins := lim.MaxLines
 	for i, ln := range t {
-		if !keep[i] && errorLine.MatchString(ln) {
+		if pins > 0 && !keep[i] && errorLine.MatchString(ln) {
 			keep[i] = true
+			pins--
 		} else if !keep[i] {
 			dropped++
 		}

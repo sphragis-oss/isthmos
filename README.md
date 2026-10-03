@@ -27,9 +27,12 @@ isthmos (Greek: ισθμός), the narrow passage your tool outputs squeeze thro
 A local context-compression layer for agent tool outputs. The core is
 agent-agnostic: JSON field pruning driven by per-tool rules, importable as a Go
 package. Adapters connect it to whatever runs your LLM: a native Claude Code
-PostToolUse hook that rewrites `tool_response` via `updatedToolOutput`, and a
+PostToolUse hook that rewrites `tool_response` via `updatedToolOutput`, an `mcp`
+wrapper that prunes the results of any stdio MCP server for any client, and a
 generic `filter` mode that works with any agent or CLI that can pipe through a
-command. Nothing leaves your machine and nothing sits in the credential path.
+command. Nothing leaves your machine. The hook and the filter never see a
+credential; the `mcp` wrapper starts the server itself, so the server inherits
+its environment through isthmos, which reads none of it.
 
 ## Status
 
@@ -90,10 +93,22 @@ traffic and rewrites nothing, so the first week costs you no risk:
           {"type": "command", "command": "ISTHMOS_SHADOW=1 $HOME/.local/bin/isthmos hook", "timeout": 5}
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {"type": "command", "command": "$HOME/.local/bin/isthmos hook", "timeout": 5}
+        ]
+      }
     ]
   }
 }
 ```
+
+The `SessionStart` entry tells isthmos when the context was compacted, so
+cross-call dedup forgets what the agent can no longer see. `doctor` warns when
+it is missing.
 
 Let it run, then read `isthmos stats`. Whether pruning is worth anything on
 your machine is an empirical question and the answer varies a lot by workload:
@@ -111,6 +126,21 @@ Narrow the matcher to the tools your stats show are actually worth pruning.
 The text limits under [Configuration](#configuration) are truncation, not
 compression, so treat them as the opt-in step: they are the fastest way to
 save bytes and the only way to lose something you wanted.
+
+### Any MCP client (stdio wrapper)
+
+Put isthmos in front of a stdio MCP server in the client's own config, and
+every tool result is pruned before the client sees it:
+
+```json
+{"command": "isthmos", "args": ["mcp", "-server", "github", "--", "github-mcp-server", "stdio"]}
+```
+
+Rules see the tools as `mcp__<server>__<tool>`, the same names the Claude Code
+hook uses, so one rules file serves both. Requests and every other message
+pass through byte for byte; only the text of `tools/call` results is
+rewritten, and `ISTHMOS_SHADOW=1` measures without rewriting here too. A
+result's `structuredContent` is left as the server sent it.
 
 ### Any other agent (generic filter)
 
@@ -135,7 +165,12 @@ shadow:  ON, measuring only, nothing is rewritten
 next:    let it run, then read the numbers with: isthmos stats
 ```
 
+`doctor` looks for the hook in `~/.claude/settings.json` and in the current
+project's `.claude/settings.json` and `.claude/settings.local.json`, and reads
+shadow mode from the hook command itself, not from your shell.
+
 Exits non-zero when something is actually broken (unreadable or invalid rules,
+a misspelled rule field or malformed tool glob, an
 unusable store, or a hook that fires but only ever receives empty payloads,
 which means the wiring or input field is wrong); a missing rules file is just
 reported, since no rules means isthmos is a deliberate no-op. Once shadow mode
@@ -165,6 +200,26 @@ Tool names are glob-matched, listed keys are dropped recursively:
 }
 ```
 
+A bare `drop_keys` entry matches that key at any depth. A dotted entry is
+scoped to its parents: `user.url` drops `url` only directly under `user`, and
+leaves every other `url` alone.
+
+`keep_keys` is the allowlist form, for payloads where naming what you want is
+shorter than naming the noise. A listed key keeps its whole subtree; outside a
+kept subtree, plain values are dropped and objects and arrays survive only as
+far as they lead to a kept key:
+
+```json
+{"tool": "mcp__atlassian__search*", "keep_keys": ["key", "summary", "status", "displayName"]}
+```
+
+Two lossless steps cost nothing to turn on. `drop_empty` removes object
+fields whose value is `null`, `""`, `[]` or `{}`. `tabular` rewrites an array
+of 3 or more same-shaped objects as `{"isthmos_table": {"cols": [...], "rows":
+[[...], ...]}}`, so the key names are sent once, not once per item. Objects
+whose key sets differ are left as they are, which is what `drop_empty` tends
+to produce, so pick one of the two per tool.
+
 Besides `drop_keys`, a rule can cap payload size generically: `max_items`
 truncates any array beyond N elements and `max_str` truncates any string beyond
 N bytes (at a rune boundary). Both replace the removed tail with an explicit
@@ -175,7 +230,9 @@ limit wins.
 Text payloads get their own limits: `max_lines` keeps head and tail lines
 with the same reversible marker, and `dedup` collapses runs of 3 or more
 identical lines into a labelled count. Error-looking lines (`error`, `fatal`,
-`panic`, `traceback`, ...) are never dropped by `max_lines`. Both apply to
+`panic`, `traceback`, ...) are pinned past the `max_lines` budget, up to
+`max_lines` extra lines, so a log made of nothing but errors still shrinks.
+Both apply to
 raw non-JSON payloads, to a JSON string carrying text, and to long strings
 embedded in JSON objects, which is where real hook payloads keep their text
 (`stdout` for Bash, `file.content` for Read).
@@ -183,8 +240,9 @@ embedded in JSON objects, which is where real hook payloads keep their text
 Truncation is head-and-tail, not naive: `keep_last` reserves part of the
 `max_items` budget for the newest entries, and items that look like errors
 (a truthy `error` field, or `status`/`level`/`conclusion` values such as
-`failed` or `fatal`) are always kept regardless of position, because those are
-the items an agent is usually looking for. `min_bytes` gates a whole rule:
+`failed` or `fatal`) are kept regardless of position, up to `max_items` extra
+items, because those are the items an agent is usually looking for.
+`min_bytes` gates a whole rule:
 payloads smaller than it pass through untouched, so tiny outputs are never
 rewritten.
 
@@ -222,6 +280,31 @@ column is a rough 4-bytes-per-token estimate, not a tokenizer.
 means a rule cut something the agent then had to fetch back, paying an extra
 tool call, so a tool with a rising reveal count is over-pruned: loosen its
 rule instead of celebrating its `SAVED%`.
+
+### Which keys to drop
+
+The savings table says which tool is heavy, not which fields. In shadow mode
+isthmos also profiles each JSON payload by key name into
+`~/.local/state/isthmos/keys.jsonl`: the 20 heaviest keys per call with their
+byte weight, names only, never values. `isthmos stats -keys` turns that into
+the list a `drop_keys` or `keep_keys` rule should be written from
+(illustrative output):
+
+```
+$ isthmos stats -keys 'mcp__github__*'
+KEY         CALLS  BYTES    SHARE
+user        42     61.3KB   58.3%
+avatar_url  42     6.9KB    6.6%
+scope: a key's bytes include everything nested under it, so rows overlap and do not sum to 100%
+```
+
+### Reproducible numbers
+
+`make bench` applies `rules.example.json` to the payloads in
+`testdata/corpus/` and prints bytes in, bytes out and the saving per tool. The
+corpus is synthetic, shaped like GitHub and Jira MCP responses, so it guards
+the starter rules against regressions and says nothing about your traffic;
+shadow mode is what measures that.
 
 ### Shadow mode
 
@@ -261,14 +344,22 @@ carries the recovery command:
 An agent that needs the full payload can simply run that command; a human can
 too. Entries expire after 7 days. If the store cannot be written, isthmos does
 not truncate at all: a marker must never point at a payload that was not
-stored. Field-pruned payloads (no truncation) are not stored.
+stored. Field-pruned payloads (no truncation) are not stored: `drop_keys` and
+`keep_keys` remove exactly the fields you configured, with no marker and no
+way back short of re-running the tool.
+
+Cross-call dedup follows the same rule. A payload the agent was already sent
+is replaced by a reference, and the reference carries a reveal id. The index
+is kept per session and per subagent, since a subagent shares the session id
+but not the parent's context, and it is cleared when the session is compacted.
 
 ## Design constraints
 
-- No proxy in the credential path
+- No network proxy and no credential handling; the `mcp` wrapper is a local stdio pipe
 - One static binary, fast cold start (runs on every tool call)
 - Fail-open: any error means untouched passthrough
-- Lossy steps must be reversible or clearly labelled
+- Truncation and dedup are reversible and labelled; field removal is explicit configuration
+- Values are never altered: numbers are re-emitted exactly as written
 
 ## Contributing
 

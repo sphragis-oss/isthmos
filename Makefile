@@ -1,4 +1,4 @@
-.PHONY: build test e2e vet fmt lint vulncheck install uninstall
+.PHONY: build test e2e bench vet fmt lint vulncheck install uninstall
 
 PREFIX ?= /usr/local
 
@@ -10,6 +10,9 @@ test:
 
 e2e: build
 	./scripts/e2e.sh ./isthmos
+
+bench:
+	go test -run TestCorpusSavings -v .
 
 vet:
 	go vet ./...

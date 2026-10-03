@@ -198,3 +198,13 @@ func TestApplyWithStoreLeavesDedupOff(t *testing.T) {
 		t.Fatal("ApplyWithStore must not dedup across calls")
 	}
 }
+
+func TestSeenResetForgetsTheSession(t *testing.T) {
+	s := OpenSeen(t.TempDir(), "session-a", time.Hour)
+	p := bigPayload(200)
+	s.Check(p)
+	s.Reset()
+	if _, ok := s.Check(p); ok {
+		t.Fatal("a reset session must not report a hit")
+	}
+}

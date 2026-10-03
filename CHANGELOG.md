@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `isthmos mcp -server NAME -- COMMAND` wraps a stdio MCP server and prunes the text of its `tools/call` results, so the rules work in any MCP client. Everything else passes through byte for byte.
+- `keep_keys`: an allowlist rule. A listed key keeps its subtree; outside one, plain values are dropped and containers survive only where they lead to a kept key.
+- Dotted `drop_keys` entries are path-scoped: `user.url` drops `url` only directly under `user`.
+- `drop_empty` removes `null`, `""`, `[]` and `{}` object fields. `tabular` rewrites arrays of 3 or more same-shaped objects as one column list plus value rows. Both are lossless.
+- Key profiling in shadow mode and `isthmos stats -keys GLOB`: the heaviest key names per tool, names only, to write `drop_keys` and `keep_keys` from.
+- `make bench` and a synthetic corpus in `testdata/corpus/`; a test fails if the starter rules save less than 30% on it.
+- `doctor` also reads the project's `.claude/settings.json` and `.claude/settings.local.json`, fails on a misspelled rule field or malformed tool glob, and warns when no `SessionStart` compact hook is wired.
+- Library: `Rules.KeepFor`, `KeyBytes`, `TopKeys`, `AggregateKeys`, `Seen.Reset`, and `Limits.DropEmpty` / `Limits.Tabular`.
+
+### Fixed
+
+- Integers beyond 2^53 were silently rounded by the JSON round trip (`1234567890123456789` became `1234567890123456800`). Numbers are now re-emitted exactly as written.
+- `<`, `>` and `&` were re-encoded as 6-byte `\u00XX` escapes, which could cancel a rule's whole saving on code and HTML payloads.
+- Cross-call dedup was keyed on `session_id` alone, which subagents share and compaction does not change, so a reference could point at content the agent never saw or no longer had. The index is now per subagent and is cleared by a `SessionStart` hook with matcher `compact`.
+- `doctor` read shadow mode from its own environment, so a hook wired with `ISTHMOS_SHADOW=1` was reported as rewriting live. It now reads the hook command.
+- Error pinning was unbounded, so a payload of nothing but error lines or items was never truncated. Pins are capped at `max_lines` / `max_items` extra entries.
+- The dedup index was written through a fixed temp path that parallel hooks could clobber.
+
+### Changed
+
+- The hook returns without measuring on `SessionStart` events.
+- README: `drop_keys` is documented as unlabelled and irreversible, where the design constraints previously implied every lossy step was labelled or reversible.
+
 ## [0.4.0] - 2026-07-26
 
 ### Added

@@ -90,15 +90,25 @@ func (s *Seen) save(m map[string]seenEntry) {
 	if err != nil {
 		return
 	}
-	tmp := s.path + ".tmp"
-	if os.WriteFile(tmp, b, 0o600) != nil {
+	// a unique temp name, since parallel tool calls run parallel hooks
+	f, err := os.CreateTemp(s.dir, "seen-*.tmp")
+	if err != nil {
 		return
 	}
-	if os.Rename(tmp, s.path) != nil {
+	tmp := f.Name()
+	_, werr := f.Write(b)
+	if cerr := f.Close(); werr != nil || cerr != nil || os.Rename(tmp, s.path) != nil {
 		_ = os.Remove(tmp)
 		return
 	}
 	s.gc()
+}
+
+// Reset forgets the session, for when its context was compacted away
+func (s *Seen) Reset() {
+	if s != nil {
+		_ = os.Remove(s.path)
+	}
 }
 
 func newest(m map[string]seenEntry, n int) map[string]seenEntry {
